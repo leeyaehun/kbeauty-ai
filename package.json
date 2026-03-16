@@ -6,8 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "seed:mfds": "tsx src/scripts/seed-mfds.ts"
+    "lint": "next lint",
+    "seed:mfds": "tsx --env-file=.env.local src/scripts/seed-mfds.ts",
+    "crawl:oliveyoung": "tsx --env-file=.env.local src/scripts/crawl-oliveyoung.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -30,6 +31,7 @@
     "dotenv": "^17.3.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "playwright": "^1.58.2",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"
