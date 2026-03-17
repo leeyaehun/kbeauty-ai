@@ -1,0 +1,150 @@
+'use client'
+
+import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+
+export default function AnalyzePage() {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'detected' | 'captured'>('loading')
+  const [faceDetected, setFaceDetected] = useState(false)
+  const router = useRouter()
+
+  // 카메라 시작
+  useEffect(() => {
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: 640, height: 480 }
+        })
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          videoRef.current.play()
+          setStatus('ready')
+        }
+      } catch (e) {
+        console.error('카메라 접근 실패:', e)
+      }
+    }
+    startCamera()
+
+    return () => {
+      if (videoRef.current?.srcObject) {
+        const tracks = (videoRef.current.srcObject as MediaStream).getTracks()
+        tracks.forEach(t => t.stop())
+      }
+    }
+  }, [])
+
+  // MediaPipe 얼굴 감지
+  useEffect(() => {
+    if (status !== 'ready') return
+
+    async function loadFaceDetector() {
+      const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision')
+
+      const vision = await FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm'
+      )
+
+      const faceDetector = await FaceDetector.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+          delegate: 'GPU'
+        },
+        runningMode: 'VIDEO',
+        minDetectionConfidence: 0.5,
+      })
+
+      // 실시간 감지 루프
+      const detect = () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) {
+          requestAnimationFrame(detect)
+          return
+        }
+
+        const results = faceDetector.detectForVideo(videoRef.current, Date.now())
+        const detected = results.detections.length > 0
+        setFaceDetected(detected)
+        if (detected) setStatus('detected')
+        else setStatus('ready')
+
+        requestAnimationFrame(detect)
+      }
+
+      detect()
+    }
+
+    loadFaceDetector()
+  }, [status === 'ready'])
+
+  // 사진 촬영
+  const capture = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) return
+
+    const canvas = canvasRef.current
+    const video = videoRef.current
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(video, 0, 0)
+
+    const imageData = canvas.toDataURL('image/jpeg', 0.8)
+
+    // 분석 페이지로 이미지 전달
+    sessionStorage.setItem('capturedImage', imageData)
+    router.push('/survey')
+  }, [router])
+
+  return (
+    <main className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
+      <h1 className="text-white text-2xl font-bold mb-2">피부 분석</h1>
+      <p className="text-gray-400 text-sm mb-6">얼굴이 화면 중앙에 오도록 맞춰주세요</p>
+
+      <div className="relative w-80 h-80 rounded-full overflow-hidden border-4 border-white/20">
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover scale-x-[-1]"
+          playsInline
+          muted
+        />
+
+        {/* 얼굴 감지 표시 */}
+        <div className={`absolute inset-0 rounded-full border-4 transition-colors duration-300 ${
+          faceDetected ? 'border-green-400' : 'border-white/20'
+        }`} />
+      </div>
+
+      <canvas ref={canvasRef} className="hidden" />
+
+      {/* 상태 메시지 */}
+      <div className="mt-6 text-center">
+        {status === 'loading' && (
+          <p className="text-gray-400">카메라 시작 중...</p>
+        )}
+        {status === 'ready' && (
+          <p className="text-gray-400">얼굴을 화면에 맞춰주세요</p>
+        )}
+        {status === 'detected' && (
+          <p className="text-green-400">얼굴이 감지됐어요!</p>
+        )}
+      </div>
+
+      {/* 촬영 버튼 */}
+      <button
+        onClick={capture}
+        disabled={!faceDetected}
+        className={`mt-8 w-20 h-20 rounded-full border-4 transition-all duration-300 ${
+          faceDetected
+            ? 'bg-white border-white scale-100 cursor-pointer hover:scale-105'
+            : 'bg-transparent border-white/30 scale-95 cursor-not-allowed'
+        }`}
+      />
+
+      <p className="text-gray-500 text-xs mt-4">
+        {faceDetected ? '버튼을 눌러 촬영하세요' : '밝은 곳에서 시도해보세요'}
+      </p>
+    </main>
+  )
+}
