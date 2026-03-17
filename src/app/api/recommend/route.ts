@@ -3,6 +3,13 @@ import OpenAI from 'openai'
 
 import { createServerSupabaseClient } from '@/lib/supabase'
 
+type RecommendedProduct = {
+  id: string
+  affiliate_url?: string | null
+  global_affiliate_url?: string | null
+  [key: string]: unknown
+}
+
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY
 
@@ -46,7 +53,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'We couldn’t load product recommendations.' }, { status: 500 })
     }
 
-    return NextResponse.json({ products })
+    const recommendedProducts = (products ?? []) as RecommendedProduct[]
+    const productIds = recommendedProducts
+      .map((product) => product.id)
+      .filter((id): id is string => Boolean(id))
+
+    if (productIds.length === 0) {
+      return NextResponse.json({ products: [] })
+    }
+
+    const { data: productUrls, error: productUrlsError } = await supabase
+      .from('products')
+      .select('id, affiliate_url, global_affiliate_url')
+      .in('id', productIds)
+
+    if (productUrlsError) {
+      console.error('Product URL merge failed:', productUrlsError)
+      return NextResponse.json({ error: 'We couldn’t load product recommendations.' }, { status: 500 })
+    }
+
+    const productUrlMap = new Map(
+      (productUrls ?? []).map((product) => [
+        product.id,
+        {
+          affiliate_url: product.affiliate_url,
+          global_affiliate_url: product.global_affiliate_url,
+        },
+      ])
+    )
+
+    const mergedProducts = recommendedProducts.map((product) => {
+      const mergedUrls = productUrlMap.get(product.id)
+
+      return {
+        ...product,
+        affiliate_url: mergedUrls?.affiliate_url ?? product.affiliate_url ?? null,
+        global_affiliate_url: mergedUrls?.global_affiliate_url ?? product.global_affiliate_url ?? null,
+      }
+    })
+
+    return NextResponse.json({ products: mergedProducts })
   } catch (error: any) {
     console.error('Recommendation error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })

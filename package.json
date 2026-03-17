@@ -9,6 +9,7 @@
     "lint": "next lint",
     "seed:mfds": "tsx --env-file=.env.local src/scripts/seed-mfds.ts",
     "crawl:oliveyoung": "tsx --env-file=.env.local src/scripts/crawl-oliveyoung.ts",
+    "match:global-oliveyoung": "tsx --env-file=.env.local src/scripts/match-global-oliveyoung.ts",
     "map:ingredients": "tsx --env-file=.env.local src/scripts/map-ingredients.ts",
     "embed:products": "tsx --env-file=.env.local src/scripts/embed-products.ts"
   },

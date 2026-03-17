@@ -17,12 +17,16 @@ type Product = {
   brand: string
   price: number
   category: string
-  affiliate_url: string
+  affiliate_url: string | null
+  global_affiliate_url: string | null
   image_url: string
   skin_profile: any
   similarity: number
   explanation?: string
+  display_affiliate_url?: string | null
 }
+
+type Region = 'korea' | 'global'
 
 export default function RecommendPage() {
   const router = useRouter()
@@ -30,11 +34,48 @@ export default function RecommendPage() {
   const [loading, setLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [region, setRegion] = useState<Region>('global')
+  const [locationReady, setLocationReady] = useState(false)
 
   const categories = ['세럼', '크림', '토너', '클렌저', '선케어']
 
   useEffect(() => {
+    let isActive = true
+
+    async function detectRegion() {
+      try {
+        const res = await fetch('/api/location', { cache: 'no-store' })
+        const data = await res.json()
+
+        if (isActive) {
+          setRegion(data.region === 'korea' ? 'korea' : 'global')
+        }
+      } catch {
+        if (isActive) {
+          setRegion('global')
+        }
+      } finally {
+        if (isActive) {
+          setLocationReady(true)
+        }
+      }
+    }
+
+    detectRegion()
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isActive = true
+
     async function fetchRecommendations() {
+      if (!locationReady) {
+        return
+      }
+
       setLoading(true)
       setError('')
 
@@ -57,12 +98,24 @@ export default function RecommendPage() {
         const data = await res.json()
 
         if (!res.ok) {
-          setError(data.error || 'Recommendation request failed.')
+          if (isActive) {
+            setError(data.error || 'Recommendation request failed.')
+          }
           return
         }
 
+        const regionAwareProducts = ((data.products ?? []) as Product[])
+          .map(product => ({
+            ...product,
+            display_affiliate_url:
+              region === 'korea' ? product.affiliate_url : product.global_affiliate_url,
+          }))
+          .filter(product =>
+            region === 'global' ? Boolean(product.display_affiliate_url) : true
+          )
+
         const productsWithExplanation = await Promise.all(
-          data.products.map(async (product: Product) => {
+          regionAwareProducts.map(async product => {
             try {
               const explainRes = await fetch('/api/explain', {
                 method: 'POST',
@@ -77,16 +130,26 @@ export default function RecommendPage() {
           })
         )
 
-        setProducts(productsWithExplanation)
+        if (isActive) {
+          setProducts(productsWithExplanation)
+        }
       } catch {
-        setError('A network error occurred while loading recommendations.')
+        if (isActive) {
+          setError('A network error occurred while loading recommendations.')
+        }
       } finally {
-        setLoading(false)
+        if (isActive) {
+          setLoading(false)
+        }
       }
     }
 
     fetchRecommendations()
-  }, [router, selectedCategory])
+
+    return () => {
+      isActive = false
+    }
+  }, [locationReady, region, router, selectedCategory])
 
   if (loading) {
     return (
@@ -171,67 +234,84 @@ export default function RecommendPage() {
         </div>
 
         <div className="grid gap-5">
-          {products.map(product => (
-            <div
-              key={product.id}
-              className="brand-card overflow-hidden p-6 md:p-7"
-            >
-              <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-                <div className="flex-1">
-                  <div className="mb-3 flex flex-wrap items-center gap-3">
-                    <span className="brand-chip px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">
-                      {product.brand}
-                    </span>
-                    <span className="rounded-full bg-[#fff0f5] px-3 py-1 text-xs font-semibold text-[#c89b3c]">
-                      {CATEGORY_KO[product.category] || product.category}
-                    </span>
-                  </div>
-
-                  <h2 className="text-2xl font-semibold leading-tight tracking-[-0.03em] text-[var(--ink)]">
-                    {product.name}
-                  </h2>
-
-                  <p className="mt-3 text-2xl font-semibold text-[#d94d82]">
-                    ${product.price.toLocaleString()}
-                  </p>
-
-                  {product.explanation && (
-                    <div className="mt-5 rounded-[22px] border border-[rgba(255,107,157,0.14)] bg-[linear-gradient(135deg,rgba(255,240,245,0.92),rgba(255,255,255,0.92))] p-5 shadow-[0_16px_28px_rgba(149,64,109,0.08)]">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Why it fits</p>
-                      <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">
-                        {product.explanation}
-                      </p>
+          {products.length === 0 ? (
+            <div className="brand-card p-8 text-center">
+              <h2 className="text-2xl font-semibold tracking-[-0.03em] text-[var(--ink)]">
+                No regional matches available
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
+                {region === 'global'
+                  ? 'These recommendations do not currently have Olive Young Global links.'
+                  : 'No products matched this filter yet. Try another category.'}
+              </p>
+            </div>
+          ) : (
+            products.map(product => (
+              <div
+                key={product.id}
+                className="brand-card overflow-hidden p-6 md:p-7"
+              >
+                <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+                  <div className="flex-1">
+                    <div className="mb-3 flex flex-wrap items-center gap-3">
+                      <span className="brand-chip px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">
+                        {product.brand}
+                      </span>
+                      <span className="rounded-full bg-[#fff0f5] px-3 py-1 text-xs font-semibold text-[#c89b3c]">
+                        {CATEGORY_KO[product.category] || product.category}
+                      </span>
                     </div>
-                  )}
-                </div>
 
-                <div className="w-full max-w-xs rounded-[24px] bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(255,240,245,0.9))] p-5 shadow-[0_18px_30px_rgba(149,64,109,0.08)]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-[var(--muted)]">Match score</span>
-                    <span className="text-lg font-semibold text-[#d94d82]">
-                      {Math.round(product.similarity * 100)}%
-                    </span>
+                    <h2 className="text-2xl font-semibold leading-tight tracking-[-0.03em] text-[var(--ink)]">
+                      {product.name}
+                    </h2>
+
+                    <p className="mt-3 text-2xl font-semibold text-[#d94d82]">
+                      ${product.price.toLocaleString()}
+                    </p>
+
+                    {product.explanation && (
+                      <div className="mt-5 rounded-[22px] border border-[rgba(255,107,157,0.14)] bg-[linear-gradient(135deg,rgba(255,240,245,0.92),rgba(255,255,255,0.92))] p-5 shadow-[0_16px_28px_rgba(149,64,109,0.08)]">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Why it fits</p>
+                        <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">
+                          {product.explanation}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-white">
-                    <div
-                      className="h-full rounded-full bg-[linear-gradient(90deg,#ff6b9d,#f6deb1)]"
-                      style={{ width: `${Math.round(product.similarity * 100)}%` }}
-                    />
-                  </div>
+                  <div className="w-full max-w-xs rounded-[24px] bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(255,240,245,0.9))] p-5 shadow-[0_18px_30px_rgba(149,64,109,0.08)]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-[var(--muted)]">Match score</span>
+                      <span className="text-lg font-semibold text-[#d94d82]">
+                        {Math.round(product.similarity * 100)}%
+                      </span>
+                    </div>
 
-                  <a
-                    href={product.affiliate_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="brand-button-primary mt-6 block w-full px-5 py-3 text-center font-semibold"
-                  >
-                    Shop on Olive Young
-                  </a>
+                    <div className="mt-4 h-3 overflow-hidden rounded-full bg-white">
+                      <div
+                        className="h-full rounded-full bg-[linear-gradient(90deg,#ff6b9d,#f6deb1)]"
+                        style={{ width: `${Math.round(product.similarity * 100)}%` }}
+                      />
+                    </div>
+
+                    {product.display_affiliate_url && (
+                      <a
+                        href={product.display_affiliate_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="brand-button-primary mt-6 block w-full px-5 py-3 text-center font-semibold"
+                      >
+                        {region === 'korea'
+                          ? 'Shop on Olive Young Korea'
+                          : 'Shop on Olive Young Global'}
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
         <div className="brand-card mt-6 p-6 text-center">
