@@ -68,6 +68,21 @@ export default function ResultsPage() {
 
         setResult(data)
         sessionStorage.setItem('analysisResult', JSON.stringify(data))
+
+        // 로그인된 유저면 히스토리 저장
+        const { createClient } = await import('@/lib/supabase')
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (user) {
+          await supabase.from('analyses').insert({
+            user_id: user.id,
+            skin_type: data.skin_type,
+            scores: data.scores,
+            concerns: data.concerns,
+            image_url: imageData,
+          })
+        }
       } catch {
         setError('네트워크 오류가 발생했어요')
       } finally {
