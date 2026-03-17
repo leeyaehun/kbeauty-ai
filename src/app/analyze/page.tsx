@@ -40,6 +40,10 @@ export default function AnalyzePage() {
   useEffect(() => {
     if (status !== 'ready') return
 
+    let faceDetector: { detectForVideo: (video: HTMLVideoElement, timestamp: number) => { detections: unknown[] }, close: () => void } | null = null
+    let animationFrameId: number | null = null
+    let isCancelled = false
+
     async function loadFaceDetector() {
       const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision')
 
@@ -47,35 +51,73 @@ export default function AnalyzePage() {
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm'
       )
 
-      const faceDetector = await FaceDetector.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
-          delegate: 'GPU'
-        },
-        runningMode: 'VIDEO',
-        minDetectionConfidence: 0.5,
-      })
+      const createFaceDetector = async (delegate: 'GPU' | 'CPU') => {
+        return FaceDetector.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+            delegate
+          },
+          runningMode: 'VIDEO',
+          minDetectionConfidence: 0.5,
+        })
+      }
+
+      const createFaceDetectorWithFallback = async (preferredDelegate: 'GPU' | 'CPU') => {
+        try {
+          return await createFaceDetector(preferredDelegate)
+        } catch (error) {
+          if (preferredDelegate === 'CPU') {
+            throw error
+          }
+
+          console.warn('GPU delegate 초기화 실패, CPU delegate로 폴백합니다.', error)
+          return createFaceDetector('CPU')
+        }
+      }
+
+      faceDetector = await createFaceDetectorWithFallback('CPU')
+
+      if (isCancelled || !faceDetector) {
+        faceDetector?.close()
+        return
+      }
 
       // 실시간 감지 루프
       const detect = () => {
-        if (!videoRef.current || videoRef.current.readyState < 2) {
-          requestAnimationFrame(detect)
+        if (isCancelled) return
+
+        const video = videoRef.current
+        const detector = faceDetector
+
+        if (!video || video.readyState < 2 || !detector) {
+          animationFrameId = requestAnimationFrame(detect)
           return
         }
 
-        const results = faceDetector.detectForVideo(videoRef.current, Date.now())
+        const results = detector.detectForVideo(video, Date.now())
         const detected = results.detections.length > 0
         setFaceDetected(detected)
         if (detected) setStatus('detected')
         else setStatus('ready')
 
-        requestAnimationFrame(detect)
+        animationFrameId = requestAnimationFrame(detect)
       }
 
       detect()
     }
 
     loadFaceDetector()
+      .catch(error => {
+        console.error('FaceDetector 초기화 실패:', error)
+      })
+
+    return () => {
+      isCancelled = true
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId)
+      }
+      faceDetector?.close()
+    }
   }, [status === 'ready'])
 
   // 사진 촬영
