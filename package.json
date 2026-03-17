@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "seed:mfds": "tsx --env-file=.env.local src/scripts/seed-mfds.ts",
-    "crawl:oliveyoung": "tsx --env-file=.env.local src/scripts/crawl-oliveyoung.ts"
+    "crawl:oliveyoung": "tsx --env-file=.env.local src/scripts/crawl-oliveyoung.ts",
+    "map:ingredients": "tsx --env-file=.env.local src/scripts/map-ingredients.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
