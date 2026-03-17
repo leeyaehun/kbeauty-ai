@@ -10,6 +10,67 @@ type RecommendedProduct = {
   [key: string]: unknown
 }
 
+type ProductUrlRow = {
+  id: string
+  affiliate_url: string | null
+  global_affiliate_url: string | null
+}
+
+function isMissingGlobalAffiliateUrlColumn(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const code = 'code' in error ? error.code : null
+  const message = 'message' in error ? error.message : null
+
+  return code === '42703' && typeof message === 'string' && message.includes('global_affiliate_url')
+}
+
+async function loadProductUrls(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, productIds: string[]) {
+  const fullQuery = await supabase
+    .from('products')
+    .select('id, affiliate_url, global_affiliate_url')
+    .in('id', productIds)
+
+  if (!fullQuery.error) {
+    return {
+      data: (fullQuery.data ?? []) as ProductUrlRow[],
+      error: null,
+    }
+  }
+
+  if (!isMissingGlobalAffiliateUrlColumn(fullQuery.error)) {
+    return {
+      data: null,
+      error: fullQuery.error,
+    }
+  }
+
+  console.warn('global_affiliate_url column is missing; falling back to affiliate_url only.')
+
+  const fallbackQuery = await supabase
+    .from('products')
+    .select('id, affiliate_url')
+    .in('id', productIds)
+
+  if (fallbackQuery.error) {
+    return {
+      data: null,
+      error: fallbackQuery.error,
+    }
+  }
+
+  return {
+    data: (fallbackQuery.data ?? []).map((product) => ({
+      id: product.id,
+      affiliate_url: product.affiliate_url,
+      global_affiliate_url: null,
+    })),
+    error: null,
+  }
+}
+
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY
 
@@ -62,10 +123,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ products: [] })
     }
 
-    const { data: productUrls, error: productUrlsError } = await supabase
-      .from('products')
-      .select('id, affiliate_url, global_affiliate_url')
-      .in('id', productIds)
+    const { data: productUrls, error: productUrlsError } = await loadProductUrls(supabase, productIds)
 
     if (productUrlsError) {
       console.error('Product URL merge failed:', productUrlsError)
