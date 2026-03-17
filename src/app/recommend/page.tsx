@@ -24,6 +24,7 @@ type Product = {
   similarity: number
   explanation?: string
   display_affiliate_url?: string | null
+  display_link_region?: Region
 }
 
 type Region = 'korea' | 'global'
@@ -125,15 +126,21 @@ export default function RecommendPage() {
           return
         }
 
-        const regionAwareProducts = ((data.products ?? []) as Product[])
-          .map(product => ({
+        const regionAwareProducts = ((data.products ?? []) as Product[]).map(product => {
+          const preferredUrl = region === 'global'
+            ? product.global_affiliate_url ?? product.affiliate_url
+            : product.affiliate_url
+
+          const linkRegion: Region = region === 'global' && product.global_affiliate_url
+            ? 'global'
+            : 'korea'
+
+          return {
             ...product,
-            display_affiliate_url:
-              region === 'korea' ? product.affiliate_url : product.global_affiliate_url,
-          }))
-          .filter(product =>
-            region === 'global' ? Boolean(product.display_affiliate_url) : true
-          )
+            display_affiliate_url: preferredUrl,
+            display_link_region: linkRegion,
+          }
+        }).filter(product => Boolean(product.display_affiliate_url))
 
         const productsWithExplanation = await Promise.all(
           regionAwareProducts.map(async product => {
@@ -325,7 +332,7 @@ export default function RecommendPage() {
                         rel="noopener noreferrer"
                         className="brand-button-primary mt-4 block w-full px-5 py-3 text-center font-semibold"
                       >
-                        {region === 'korea'
+                        {product.display_link_region === 'korea'
                           ? 'Shop on Olive Young Korea'
                           : 'Shop on Olive Young Global'}
                       </a>

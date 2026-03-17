@@ -7,6 +7,7 @@ type RecommendedProduct = {
   id: string
   affiliate_url?: string | null
   global_affiliate_url?: string | null
+  similarity?: number | null
   [key: string]: unknown
 }
 
@@ -85,6 +86,18 @@ function buildUserProfileText(analysisResult: any) {
   return `Skin type: ${analysisResult.skin_type} | Hydration: ${analysisResult.scores.hydration} | Oil level: ${analysisResult.scores.oiliness} | Sensitivity: ${analysisResult.scores.sensitivity} | Concerns: ${analysisResult.concerns.join(', ')}`
 }
 
+function normalizeMatchScore(similarity: unknown) {
+  const raw = typeof similarity === 'number' ? similarity : Number(similarity)
+
+  if (Number.isNaN(raw)) {
+    return 0.6
+  }
+
+  const weighted = Math.max(0, Math.min(raw * 1.5, 1))
+
+  return Number((0.6 + weighted * 0.39).toFixed(4))
+}
+
 export async function POST(req: NextRequest) {
   try {
     const openai = getOpenAIClient()
@@ -104,8 +117,8 @@ export async function POST(req: NextRequest) {
     const supabase = await createServerSupabaseClient()
     const { data: products, error } = await supabase.rpc('match_products', {
       query_embedding: userEmbedding,
-      skin_type_filter: category || null,
-      category_filter: null,
+      skin_type_filter: null,
+      category_filter: category || null,
       match_count: 6,
     })
 
@@ -145,6 +158,7 @@ export async function POST(req: NextRequest) {
 
       return {
         ...product,
+        similarity: normalizeMatchScore(product.similarity),
         affiliate_url: mergedUrls?.affiliate_url ?? product.affiliate_url ?? null,
         global_affiliate_url: mergedUrls?.global_affiliate_url ?? product.global_affiliate_url ?? null,
       }
