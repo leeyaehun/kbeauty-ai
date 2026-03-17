@@ -6,29 +6,29 @@ import { useRouter } from 'next/navigation'
 const questions = [
   {
     id: 'tightness',
-    question: 'After cleansing, does your skin feel tight?',
+    question: 'How does your skin feel a few hours after washing your face?',
     options: [
-      { value: 1, label: 'Not at all' },
-      { value: 2, label: 'A little' },
-      { value: 3, label: 'Very tight' },
+      { value: 1, label: 'Dry and uncomfortable' },
+      { value: 2, label: 'Normal and balanced' },
+      { value: 3, label: 'Oily or shiny' },
     ]
   },
   {
     id: 'oiliness',
-    question: 'Does your T-zone get oily during the day?',
+    question: 'Where does your face get oily or shiny during the day?',
     options: [
-      { value: 1, label: 'Never' },
-      { value: 2, label: 'Sometimes' },
-      { value: 3, label: 'Always' },
+      { value: 1, label: 'Never oily' },
+      { value: 2, label: 'Just my nose & forehead' },
+      { value: 3, label: 'My whole face' },
     ]
   },
   {
     id: 'trouble',
-    question: 'How often do you get breakouts?',
+    question: 'How often do you get pimples, redness, or skin irritation?',
     options: [
       { value: 1, label: 'Rarely' },
       { value: 2, label: 'Sometimes' },
-      { value: 3, label: 'Often' },
+      { value: 3, label: 'Often (almost every week)' },
     ]
   },
 ]
