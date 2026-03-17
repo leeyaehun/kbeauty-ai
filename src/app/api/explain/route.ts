@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: 'user',
-          content: `Look at the skin analysis result and the product information, then explain the recommendation in exactly 2 sentences. Write in polished, friendly English for a global beauty audience. Return only the explanation.
+          content: `Look at the skin analysis result and the product information, then explain the recommendation in polished, friendly English for a global beauty audience. Return only the explanation.
 
 Skin analysis:
 - Skin type: ${analysisResult.skin_type}
@@ -41,7 +41,7 @@ Recommended product:
 - Category: ${product.category}
 - Skin profile: ${JSON.stringify(product.skin_profile)}
 
-Explain why this product fits this skin type from a K-beauty ingredient perspective. You may mention hydration, sebum balance, centella, soothing care, barrier support, or texture benefits when relevant.`
+Explain in 1 short sentence (max 20 words) why this product suits this skin type. Focus on the key ingredient benefit only.`
         }
       ]
     })

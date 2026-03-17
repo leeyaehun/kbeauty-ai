@@ -19,7 +19,7 @@ type Product = {
   category: string
   affiliate_url: string | null
   global_affiliate_url: string | null
-  image_url: string
+  image_url: string | null
   skin_profile: any
   similarity: number
   explanation?: string
@@ -27,6 +27,27 @@ type Product = {
 }
 
 type Region = 'korea' | 'global'
+
+function ProductImage({ imageUrl, productName }: { imageUrl: string | null, productName: string }) {
+  const [imageFailed, setImageFailed] = useState(false)
+
+  if (!imageUrl || imageFailed) {
+    return (
+      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[22px] bg-[linear-gradient(135deg,#fff3eb,#ffe4ef)] text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d94d82] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+        No Image
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={imageUrl}
+      alt={productName}
+      className="h-20 w-20 shrink-0 rounded-[22px] object-cover shadow-[0_12px_24px_rgba(149,64,109,0.12)]"
+      onError={() => setImageFailed(true)}
+    />
+  )
+}
 
 export default function RecommendPage() {
   const router = useRouter()
@@ -251,36 +272,38 @@ export default function RecommendPage() {
                 key={product.id}
                 className="brand-card overflow-hidden p-6 md:p-7"
               >
-                <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-                  <div className="flex-1">
-                    <div className="mb-3 flex flex-wrap items-center gap-3">
-                      <span className="brand-chip px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">
-                        {product.brand}
-                      </span>
-                      <span className="rounded-full bg-[#fff0f5] px-3 py-1 text-xs font-semibold text-[#c89b3c]">
-                        {CATEGORY_KO[product.category] || product.category}
-                      </span>
-                    </div>
+                <div className="flex flex-col gap-5">
+                  <div className="flex items-start gap-4">
+                    <ProductImage
+                      imageUrl={product.image_url}
+                      productName={product.name}
+                    />
 
-                    <h2 className="text-2xl font-semibold leading-tight tracking-[-0.03em] text-[var(--ink)]">
-                      {product.name}
-                    </h2>
-
-                    <p className="mt-3 text-2xl font-semibold text-[#d94d82]">
-                      ${product.price.toLocaleString()}
-                    </p>
-
-                    {product.explanation && (
-                      <div className="mt-5 rounded-[22px] border border-[rgba(255,107,157,0.14)] bg-[linear-gradient(135deg,rgba(255,240,245,0.92),rgba(255,255,255,0.92))] p-5 shadow-[0_16px_28px_rgba(149,64,109,0.08)]">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Why it fits</p>
-                        <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">
-                          {product.explanation}
-                        </p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="brand-chip px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">
+                          {product.brand}
+                        </span>
+                        <span className="rounded-full bg-[#fff0f5] px-3 py-1 text-xs font-semibold text-[#c89b3c]">
+                          {CATEGORY_KO[product.category] || product.category}
+                        </span>
                       </div>
-                    )}
+
+                      <h2 className="mt-3 text-lg font-semibold leading-snug tracking-[-0.03em] text-[var(--ink)] md:text-xl">
+                        {product.name}
+                      </h2>
+
+                      <p className="mt-2 text-xl font-semibold text-[#d94d82]">
+                        ${product.price.toLocaleString()}
+                      </p>
+
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">
+                        {product.explanation || 'Balanced to support your skin profile with a targeted K-beauty ingredient focus.'}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="w-full max-w-xs rounded-[24px] bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(255,240,245,0.9))] p-5 shadow-[0_18px_30px_rgba(149,64,109,0.08)]">
+                  <div className="rounded-[24px] border border-[rgba(255,107,157,0.12)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(255,240,245,0.92))] p-4 shadow-[0_16px_28px_rgba(149,64,109,0.08)]">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold text-[var(--muted)]">Match score</span>
                       <span className="text-lg font-semibold text-[#d94d82]">
@@ -288,7 +311,7 @@ export default function RecommendPage() {
                       </span>
                     </div>
 
-                    <div className="mt-4 h-3 overflow-hidden rounded-full bg-white">
+                    <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
                       <div
                         className="h-full rounded-full bg-[linear-gradient(90deg,#ff6b9d,#f6deb1)]"
                         style={{ width: `${Math.round(product.similarity * 100)}%` }}
@@ -300,7 +323,7 @@ export default function RecommendPage() {
                         href={product.display_affiliate_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="brand-button-primary mt-6 block w-full px-5 py-3 text-center font-semibold"
+                        className="brand-button-primary mt-4 block w-full px-5 py-3 text-center font-semibold"
                       >
                         {region === 'korea'
                           ? 'Shop on Olive Young Korea'
