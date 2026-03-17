@@ -67,6 +67,7 @@ export default function ResultsPage() {
         }
 
         setResult(data)
+        sessionStorage.setItem('analysisResult', JSON.stringify(data))
       } catch {
         setError('네트워크 오류가 발생했어요')
       } finally {
