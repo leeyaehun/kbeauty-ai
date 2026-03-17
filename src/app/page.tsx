@@ -20,56 +20,130 @@ export default function Home() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+      <main className="brand-page flex items-center justify-center">
+        <div className="brand-card flex items-center gap-4 px-6 py-5">
+          <div className="h-10 w-10 rounded-full border-4 border-[#ffb3d1]/50 border-t-[#ff6b9d] animate-spin" />
+          <div>
+            <p className="text-sm font-semibold text-[#d94d82]">K-Beauty AI</p>
+            <p className="text-sm text-[var(--muted)]">Preparing your glow ritual...</p>
+          </div>
+        </div>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-8">
-      <h1 className="text-4xl font-bold mb-4 text-center">
-        K-Beauty AI
-      </h1>
-      <p className="text-gray-400 mb-2 text-center max-w-md">
-        셀카 한 장으로 피부 타입 분석 후 맞춤 K-뷰티 제품을 추천해드려요
-      </p>
+    <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
+      <div className="brand-shell">
+        <div className="mb-10 flex justify-center md:justify-start">
+          <div className="brand-mark">K-Beauty AI</div>
+        </div>
 
-      {user && (
-        <p className="text-green-400 text-sm mb-8">
-          {user.email}
-        </p>
-      )}
-      {!user && <div className="mb-8" />}
+        <section className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div className="space-y-6">
+            <div className="brand-chip px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#d94d82]">
+              Seoul-inspired skin intelligence
+            </div>
+            <div className="space-y-4">
+              <h1 className="max-w-3xl text-5xl font-semibold leading-[0.94] tracking-[-0.04em] text-[var(--ink)] md:text-7xl">
+                Your Skin. Your Glow. Your K-Beauty.
+              </h1>
+              <p className="max-w-2xl text-base leading-7 text-[var(--muted)] md:text-lg">
+                Discover a more elevated way to understand your skin. One selfie, a few quick answers,
+                and a curated K-beauty routine designed around hydration, balance, and radiance.
+              </p>
+            </div>
 
-      <a
-        href="/analyze"
-        className="bg-white text-black px-8 py-3 rounded-full font-semibold hover:bg-gray-100 transition mb-4"
-      >
-        Analyze My Skin - Free
-      </a>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="brand-card-soft p-5">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">01</p>
+                <p className="font-semibold text-[var(--ink)]">Snap your skin</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Live face capture built for quick mobile analysis.</p>
+              </div>
+              <div className="brand-card-soft p-5">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">02</p>
+                <p className="font-semibold text-[var(--ink)]">Decode your needs</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Hydration, oil balance, sensitivity, and concern mapping.</p>
+              </div>
+              <div className="brand-card-soft p-5">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">03</p>
+                <p className="font-semibold text-[var(--ink)]">Shop your match</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Product picks with K-beauty ingredient reasoning and fit score.</p>
+              </div>
+            </div>
 
-      {!user && (
-        <button
-          onClick={() => router.push('/login')}
-          className="text-gray-400 text-sm hover:text-white transition"
-        >
-          로그인하고 히스토리 저장하기
-        </button>
-      )}
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <a
+                href="/analyze"
+                className="brand-button-primary px-8 py-4 text-center font-semibold"
+              >
+                Start Skin Analysis
+              </a>
 
-      {user && (
-        <button
-          onClick={async () => {
-            const supabase = createClient()
-            await supabase.auth.signOut()
-            setUser(null)
-          }}
-          className="text-gray-400 text-sm hover:text-white transition"
-        >
-          로그아웃
-        </button>
-      )}
+              {!user && (
+                <button
+                  onClick={() => router.push('/login')}
+                  className="brand-button-secondary px-8 py-4 font-semibold"
+                >
+                  Save My History
+                </button>
+              )}
+
+              {user && (
+                <button
+                  onClick={async () => {
+                    const supabase = createClient()
+                    await supabase.auth.signOut()
+                    setUser(null)
+                  }}
+                  className="brand-button-secondary px-8 py-4 font-semibold"
+                >
+                  Sign Out
+                </button>
+              )}
+            </div>
+
+            <div className="text-sm text-[var(--muted)]">
+              {user ? `Signed in as ${user.email}` : 'No account required to try your first analysis.'}
+            </div>
+          </div>
+
+          <div className="brand-card relative overflow-hidden p-6 md:p-8">
+            <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top,#ffb3d1_0%,rgba(255,179,209,0.16)_46%,transparent_75%)]" />
+            <div className="relative space-y-6">
+              <div className="flex items-center justify-between rounded-[24px] bg-white/80 p-4 shadow-[0_18px_34px_rgba(149,64,109,0.08)]">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Glow Profile</p>
+                  <p className="mt-2 text-2xl font-semibold text-[var(--ink)]">Luminous, balanced skin</p>
+                </div>
+                <div className="rounded-full bg-[#fff0f5] px-4 py-2 text-sm font-semibold text-[#c89b3c]">
+                  K-Beauty Edit
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-[24px] bg-[#fff0f5] p-5">
+                  <p className="text-sm font-semibold text-[#d94d82]">Hydration</p>
+                  <p className="mt-3 text-4xl font-semibold text-[var(--ink)]">92</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Barrier comfort and glow retention mapped from one selfie.</p>
+                </div>
+                <div className="rounded-[24px] bg-white p-5 shadow-[0_14px_24px_rgba(149,64,109,0.08)]">
+                  <p className="text-sm font-semibold text-[#d94d82]">Routine Match</p>
+                  <p className="mt-3 text-4xl font-semibold text-[var(--ink)]">6</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Curated product suggestions with ingredient-level explanations.</p>
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-[rgba(200,155,60,0.25)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(246,222,177,0.45))] p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c89b3c]">Designed for global beauty lovers</p>
+                <p className="mt-3 text-lg font-semibold text-[var(--ink)]">
+                  Elevated diagnostics, soft femininity, and practical skincare guidance in one polished flow.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
     </main>
   )
 }

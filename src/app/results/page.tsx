@@ -69,7 +69,6 @@ export default function ResultsPage() {
         setResult(data)
         sessionStorage.setItem('analysisResult', JSON.stringify(data))
 
-        // 로그인된 유저면 히스토리 저장
         const { createClient } = await import('@/lib/supabase')
         const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser()
@@ -95,25 +94,32 @@ export default function ResultsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-black flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
-        <p className="text-white text-lg">피부 분석 중...</p>
-        <p className="text-gray-400 text-sm">AI가 피부를 분석하고 있어요</p>
+      <main className="brand-page flex items-center justify-center px-6">
+        <div className="brand-card flex max-w-md items-center gap-4 px-6 py-5">
+          <div className="h-10 w-10 rounded-full border-4 border-[#ffb3d1]/60 border-t-[#ff6b9d] animate-spin" />
+          <div>
+            <p className="text-sm font-semibold text-[#d94d82]">Analyzing your glow</p>
+            <p className="text-sm text-[var(--muted)]">AI is mapping your skin profile now.</p>
+          </div>
+        </div>
       </main>
     )
   }
 
   if (error) {
     return (
-      <main className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 p-6">
-        <p className="text-white text-lg">분석 중 오류가 발생했어요</p>
-        <p className="text-gray-400 text-sm">{error}</p>
-        <button
-          onClick={() => router.push('/analyze')}
-          className="mt-4 px-6 py-3 bg-white text-black rounded-full font-semibold"
-        >
-          다시 시도하기
-        </button>
+      <main className="brand-page flex items-center justify-center px-6 py-10">
+        <div className="brand-card max-w-lg p-8 text-center">
+          <div className="brand-mark mx-auto">K-Beauty AI</div>
+          <h1 className="mt-6 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Analysis needs another try</h1>
+          <p className="mt-4 text-base leading-7 text-[var(--muted)]">{error}</p>
+          <button
+            onClick={() => router.push('/analyze')}
+            className="brand-button-primary mt-8 px-8 py-4 font-semibold"
+          >
+            Return to camera
+          </button>
+        </div>
       </main>
     )
   }
@@ -121,98 +127,135 @@ export default function ResultsPage() {
   if (!result) return null
 
   const scores = [
-    { label: '수분도', value: result.scores.hydration, color: 'bg-blue-400' },
-    { label: '유분도', value: result.scores.oiliness, color: 'bg-yellow-400' },
-    { label: '민감도', value: result.scores.sensitivity, color: 'bg-red-400' },
-    { label: '색소침착', value: result.scores.pigmentation, color: 'bg-purple-400' },
+    { label: '수분도', value: result.scores.hydration, color: '#60a5fa', glow: 'from-[#cfe6ff] to-[#ffffff]' },
+    { label: '유분도', value: result.scores.oiliness, color: '#e7b300', glow: 'from-[#fff0be] to-[#ffffff]' },
+    { label: '민감도', value: result.scores.sensitivity, color: '#f87171', glow: 'from-[#ffd8d8] to-[#ffffff]' },
+    { label: '색소침착', value: result.scores.pigmentation, color: '#c084fc', glow: 'from-[#f1e2ff] to-[#ffffff]' },
   ]
 
   return (
-    <main className="min-h-screen bg-black text-white p-6">
-      <h1 className="text-2xl font-bold mb-1">분석 결과</h1>
-      <p className="text-gray-400 text-sm mb-8">AI 피부 분석이 완료됐어요</p>
+    <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
+      <div className="brand-shell">
+        <div className="mb-8 flex justify-center md:justify-start">
+          <div className="brand-mark">K-Beauty AI</div>
+        </div>
 
-      <div className="bg-white/10 rounded-2xl p-6 mb-6 text-center">
-        <p className="text-gray-400 text-sm mb-2">내 피부 타입</p>
-        <p className="text-4xl font-bold mb-2">
-          {SKIN_TYPE_KO[result.skin_type] || result.skin_type}
-        </p>
-        <p className="text-gray-400 text-xs">
-          신뢰도 {Math.round(result.confidence * 100)}%
-        </p>
-      </div>
-
-      <div className="bg-white/5 rounded-2xl p-6 mb-6">
-        <p className="text-sm font-medium mb-4">피부 점수</p>
-        <div className="flex flex-col gap-4">
-          {scores.map(score => (
-            <div key={score.label}>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-300">{score.label}</span>
-                <span className="font-medium">{score.value}</span>
+        <div className="grid gap-6 lg:grid-cols-[0.88fr_1.12fr]">
+          <aside className="space-y-6">
+            <div className="brand-card overflow-hidden p-8">
+              <div className="mb-4 inline-flex rounded-full bg-[linear-gradient(135deg,rgba(255,107,157,0.14),rgba(246,222,177,0.34))] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">
+                Skin portrait
               </div>
-              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${score.color} rounded-full transition-all duration-700`}
-                  style={{ width: `${score.value}%` }}
-                />
+              <p className="text-sm uppercase tracking-[0.18em] text-[var(--muted)]">Your skin type</p>
+              <h1 className="mt-3 text-5xl font-semibold tracking-[-0.05em] text-[var(--ink)]">
+                {SKIN_TYPE_KO[result.skin_type] || result.skin_type}
+              </h1>
+              <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
+                A soft synthesis of image analysis and your survey answers, designed to reflect how your skin behaves in real life.
+              </p>
+
+              <div className="mt-8 rounded-[26px] border border-[rgba(200,155,60,0.24)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(246,222,177,0.42))] p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c89b3c]">Confidence</p>
+                <p className="mt-2 text-3xl font-semibold text-[var(--ink)]">
+                  {Math.round(result.confidence * 100)}%
+                </p>
               </div>
             </div>
-          ))}
+
+            {result.concerns.length > 0 && (
+              <div className="brand-card p-7">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Main concerns</p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  {result.concerns.map(concern => (
+                    <span
+                      key={concern}
+                      className="brand-chip px-4 py-2 text-sm font-medium"
+                    >
+                      {CONCERN_KO[concern] || concern}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </aside>
+
+          <section className="space-y-6">
+            <div className="brand-card p-7 md:p-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Glow metrics</p>
+                  <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Your skin scoreboard</h2>
+                </div>
+                <div className="rounded-full bg-[#fff0f5] px-4 py-2 text-sm font-semibold text-[#c89b3c]">
+                  AI completed
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                {scores.map(score => (
+                  <div
+                    key={score.label}
+                    className={`rounded-[26px] border border-[rgba(255,107,157,0.14)] bg-gradient-to-br ${score.glow} p-5 shadow-[0_18px_30px_rgba(149,64,109,0.08)]`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-[var(--muted-strong)]">{score.label}</p>
+                      <p className="text-2xl font-semibold" style={{ color: score.color }}>{score.value}</p>
+                    </div>
+                    <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/80">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${score.value}%`, backgroundColor: score.color }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="brand-card p-7 md:p-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Next step</p>
+              <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Build your routine</h2>
+              <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
+                Move into product recommendations to see which K-beauty formulas best complement your hydration, oil balance, and sensitivity profile.
+              </p>
+
+              <div className="mt-6 flex flex-col gap-3">
+                <button
+                  onClick={() => router.push('/recommend')}
+                  className="brand-button-primary w-full py-4 font-semibold"
+                >
+                  Explore My Product Matches
+                </button>
+
+                <button
+                  onClick={() => {
+                    const shareUrl = `${window.location.origin}/api/og?skin_type=${result.skin_type}&hydration=${result.scores.hydration}&oiliness=${result.scores.oiliness}&sensitivity=${result.scores.sensitivity}`
+                    if (navigator.share) {
+                      navigator.share({
+                        title: 'K-Beauty AI 피부 분석 결과',
+                        text: `내 피부 타입은 ${SKIN_TYPE_KO[result.skin_type]}! K-Beauty AI로 분석해봤어요`,
+                        url: shareUrl,
+                      })
+                    } else {
+                      navigator.clipboard.writeText(shareUrl)
+                      alert('링크가 복사됐어요!')
+                    }
+                  }}
+                  className="brand-button-secondary w-full py-4 font-semibold"
+                >
+                  Share My Skin Result
+                </button>
+
+                <button
+                  onClick={() => router.push('/analyze')}
+                  className="brand-button-ghost w-full py-4 font-semibold"
+                >
+                  Analyze Again
+                </button>
+              </div>
+            </div>
+          </section>
         </div>
-      </div>
-
-      {result.concerns.length > 0 && (
-        <div className="bg-white/5 rounded-2xl p-6 mb-8">
-          <p className="text-sm font-medium mb-3">주요 피부 고민</p>
-          <div className="flex flex-wrap gap-2">
-            {result.concerns.map(concern => (
-              <span
-                key={concern}
-                className="px-3 py-1 bg-white/10 rounded-full text-sm text-gray-300"
-              >
-                {CONCERN_KO[concern] || concern}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 버튼 */}
-      <div className="flex flex-col gap-3">
-        <button
-          onClick={() => router.push('/recommend')}
-          className="w-full py-4 bg-white text-black rounded-full font-semibold hover:bg-gray-100 transition"
-        >
-          맞춤 제품 추천받기
-        </button>
-
-        {/* 공유 버튼 */}
-        <button
-          onClick={() => {
-            const url = `${window.location.origin}/api/og?skin_type=${result.skin_type}&hydration=${result.scores.hydration}&oiliness=${result.scores.oiliness}&sensitivity=${result.scores.sensitivity}`
-            if (navigator.share) {
-              navigator.share({
-                title: 'K-Beauty AI 피부 분석 결과',
-                text: `내 피부 타입은 ${SKIN_TYPE_KO[result.skin_type]}! K-Beauty AI로 분석해봤어요`,
-                url: window.location.origin,
-              })
-            } else {
-              navigator.clipboard.writeText(window.location.origin)
-              alert('링크가 복사됐어요!')
-            }
-          }}
-          className="w-full py-4 border border-white/20 text-white rounded-full font-semibold hover:border-white/50 transition"
-        >
-          결과 공유하기
-        </button>
-
-        <button
-          onClick={() => router.push('/analyze')}
-          className="w-full py-4 border border-white/10 text-gray-400 rounded-full font-semibold hover:border-white/30 transition"
-        >
-          다시 분석하기
-        </button>
       </div>
     </main>
   )

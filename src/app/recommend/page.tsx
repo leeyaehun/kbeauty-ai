@@ -90,136 +90,175 @@ export default function RecommendPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-black flex flex-col items-center justify-center gap-4">
-        <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
-        <p className="text-white text-lg">맞춤 제품 찾는 중...</p>
-        <p className="text-gray-400 text-sm">AI가 최적의 K-뷰티 제품을 찾고 있어요</p>
+      <main className="brand-page flex items-center justify-center px-6">
+        <div className="brand-card flex max-w-md items-center gap-4 px-6 py-5">
+          <div className="h-10 w-10 rounded-full border-4 border-[#ffb3d1]/60 border-t-[#ff6b9d] animate-spin" />
+          <div>
+            <p className="text-sm font-semibold text-[#d94d82]">Curating your routine</p>
+            <p className="text-sm text-[var(--muted)]">Matching products to your skin profile.</p>
+          </div>
+        </div>
       </main>
     )
   }
 
   if (error) {
     return (
-      <main className="min-h-screen bg-black flex flex-col items-center justify-center gap-4 p-6">
-        <p className="text-white text-lg">오류가 발생했어요</p>
-        <p className="text-gray-400 text-sm">{error}</p>
-        <button
-          onClick={() => router.push('/analyze')}
-          className="mt-4 px-6 py-3 bg-white text-black rounded-full font-semibold"
-        >
-          다시 시도하기
-        </button>
+      <main className="brand-page flex items-center justify-center px-6 py-10">
+        <div className="brand-card max-w-lg p-8 text-center">
+          <div className="brand-mark mx-auto">K-Beauty AI</div>
+          <h1 className="mt-6 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Recommendations are unavailable</h1>
+          <p className="mt-4 text-base leading-7 text-[var(--muted)]">{error}</p>
+          <button
+            onClick={() => router.push('/analyze')}
+            className="brand-button-primary mt-8 px-8 py-4 font-semibold"
+          >
+            Back to analysis
+          </button>
+        </div>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen bg-black text-white p-6">
-      <h1 className="text-2xl font-bold mb-1">맞춤 제품 추천</h1>
-      <p className="text-gray-400 text-sm mb-6">내 피부 타입에 맞는 K-뷰티 제품이에요</p>
+    <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
+      <div className="brand-shell">
+        <div className="mb-8 flex justify-center md:justify-start">
+          <div className="brand-mark">K-Beauty AI</div>
+        </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-6">
-        <button
-          onClick={() => setSelectedCategory(null)}
-          className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition-all ${
-            selectedCategory === null
-              ? 'bg-white text-black font-medium'
-              : 'border border-white/20 text-gray-300'
-          }`}
-        >
-          전체
-        </button>
-        {categories.map(cat => (
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="brand-chip px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">
+              Curated recommendations
+            </div>
+            <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+              Your K-beauty lineup
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--muted)]">
+              Handpicked formulas aligned to your skin profile, explained in a softer editorial style for global beauty lovers.
+            </p>
+          </div>
+          <div className="rounded-full border border-[rgba(200,155,60,0.24)] bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(246,222,177,0.45))] px-5 py-3 text-sm font-semibold text-[#c89b3c] shadow-[0_14px_24px_rgba(149,64,109,0.08)]">
+            {products.length} personalized picks
+          </div>
+        </div>
+
+        <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
           <button
-            key={cat}
-            onClick={() => setSelectedCategory(cat)}
-            className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition-all ${
-              selectedCategory === cat
-                ? 'bg-white text-black font-medium'
-                : 'border border-white/20 text-gray-300'
+            onClick={() => setSelectedCategory(null)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap transition-all ${
+              selectedCategory === null
+                ? 'brand-button-primary'
+                : 'brand-button-secondary'
             }`}
           >
-            {CATEGORY_KO[cat]}
+            All
           </button>
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-4">
-        {products.map(product => (
-          <div
-            key={product.id}
-            className="bg-white/5 rounded-2xl p-5 border border-white/10"
-          >
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <p className="text-xs text-gray-400 mb-1">{product.brand}</p>
-                <p className="font-medium text-base leading-tight">{product.name}</p>
-              </div>
-              <span className="text-xs bg-white/10 px-2 py-1 rounded-full text-gray-300 ml-2 whitespace-nowrap">
-                {product.category}
-              </span>
-            </div>
-
-            <p className="text-lg font-bold text-white mb-3">
-              {product.price.toLocaleString()}원
-            </p>
-
-            {product.explanation && (
-              <p className="text-sm text-gray-300 leading-relaxed mb-4 border-l-2 border-white/20 pl-3">
-                {product.explanation}
-              </p>
-            )}
-
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-xs text-gray-400">매칭도</span>
-              <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-400 rounded-full"
-                  style={{ width: `${Math.round(product.similarity * 100)}%` }}
-                />
-              </div>
-              <span className="text-xs text-green-400 font-medium">
-                {Math.round(product.similarity * 100)}%
-              </span>
-            </div>
-
-            <a
-              href={product.affiliate_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full py-3 bg-white text-black text-center rounded-xl font-semibold text-sm hover:bg-gray-100 transition"
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap transition-all ${
+                selectedCategory === cat
+                  ? 'brand-button-primary'
+                  : 'brand-button-secondary'
+              }`}
             >
-              올리브영에서 보기
-            </a>
-          </div>
-        ))}
-      </div>
+              {CATEGORY_KO[cat]}
+            </button>
+          ))}
+        </div>
 
-      {/* Pro 업그레이드 버튼 */}
-      <div className="mt-6 p-5 border border-white/20 rounded-2xl text-center">
-        <p className="text-white font-semibold mb-1">K-Beauty AI Pro</p>
-        <p className="text-gray-400 text-sm mb-4">
-          무제한 분석 · 히스토리 저장 · 제품 6개 추천
-        </p>
+        <div className="grid gap-5">
+          {products.map(product => (
+            <div
+              key={product.id}
+              className="brand-card overflow-hidden p-6 md:p-7"
+            >
+              <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+                <div className="flex-1">
+                  <div className="mb-3 flex flex-wrap items-center gap-3">
+                    <span className="brand-chip px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">
+                      {product.brand}
+                    </span>
+                    <span className="rounded-full bg-[#fff0f5] px-3 py-1 text-xs font-semibold text-[#c89b3c]">
+                      {product.category}
+                    </span>
+                  </div>
+
+                  <h2 className="text-2xl font-semibold leading-tight tracking-[-0.03em] text-[var(--ink)]">
+                    {product.name}
+                  </h2>
+
+                  <p className="mt-3 text-2xl font-semibold text-[#d94d82]">
+                    {product.price.toLocaleString()}원
+                  </p>
+
+                  {product.explanation && (
+                    <div className="mt-5 rounded-[22px] border border-[rgba(255,107,157,0.14)] bg-[linear-gradient(135deg,rgba(255,240,245,0.92),rgba(255,255,255,0.92))] p-5 shadow-[0_16px_28px_rgba(149,64,109,0.08)]">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Why it fits</p>
+                      <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">
+                        {product.explanation}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="w-full max-w-xs rounded-[24px] bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(255,240,245,0.9))] p-5 shadow-[0_18px_30px_rgba(149,64,109,0.08)]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-[var(--muted)]">Match score</span>
+                    <span className="text-lg font-semibold text-[#d94d82]">
+                      {Math.round(product.similarity * 100)}%
+                    </span>
+                  </div>
+
+                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-white">
+                    <div
+                      className="h-full rounded-full bg-[linear-gradient(90deg,#ff6b9d,#f6deb1)]"
+                      style={{ width: `${Math.round(product.similarity * 100)}%` }}
+                    />
+                  </div>
+
+                  <a
+                    href={product.affiliate_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="brand-button-primary mt-6 block w-full px-5 py-3 text-center font-semibold"
+                  >
+                    View at Olive Young
+                  </a>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="brand-card mt-6 p-6 text-center">
+          <p className="text-lg font-semibold text-[var(--ink)]">K-Beauty AI Pro</p>
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            Unlimited analyses, history storage, and six product recommendations every time.
+          </p>
+          <button
+            onClick={async () => {
+              const res = await fetch('/api/stripe/checkout', { method: 'POST' })
+              const data = await res.json()
+              if (data.url) window.location.href = data.url
+              else alert(data.error || '오류가 발생했어요')
+            }}
+            className="brand-button-primary mt-5 w-full py-4 font-semibold"
+          >
+            Start Pro for $9/month
+          </button>
+        </div>
+
         <button
-          onClick={async () => {
-            const res = await fetch('/api/stripe/checkout', { method: 'POST' })
-            const data = await res.json()
-            if (data.url) window.location.href = data.url
-            else alert(data.error || '오류가 발생했어요')
-          }}
-          className="w-full py-3 bg-white text-black rounded-full font-semibold hover:bg-gray-100 transition"
+          onClick={() => router.push('/analyze')}
+          className="brand-button-ghost mt-4 w-full py-4 font-semibold"
         >
-          $9/월 Pro 시작하기
+          Analyze Again
         </button>
       </div>
-
-      <button
-        onClick={() => router.push('/analyze')}
-        className="w-full mt-4 py-4 border border-white/20 text-white rounded-full font-semibold hover:border-white/50 transition"
-      >
-        다시 분석하기
-      </button>
     </main>
   )
 }

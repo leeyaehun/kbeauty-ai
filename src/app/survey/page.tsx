@@ -45,46 +45,77 @@ export default function SurveyPage() {
   }
 
   return (
-    <main className="min-h-screen bg-black text-white p-6 flex flex-col">
-      <h1 className="text-2xl font-bold mb-2">피부 설문</h1>
-      <p className="text-gray-400 text-sm mb-8">정확한 분석을 위해 3가지만 답해주세요</p>
+    <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
+      <div className="brand-shell">
+        <div className="mb-8 flex justify-center md:justify-start">
+          <div className="brand-mark">K-Beauty AI</div>
+        </div>
 
-      <div className="flex flex-col gap-8 flex-1">
-        {questions.map((q, idx) => (
-          <div key={q.id}>
-            <p className="text-base font-medium mb-3">
-              {idx + 1}. {q.question}
+        <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+          <aside className="brand-card p-7 md:p-8">
+            <div className="brand-chip px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">
+              Skin quiz
+            </div>
+            <h1 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+              Tell us how your skin feels
+            </h1>
+            <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
+              These three answers help the camera analysis feel more human, more nuanced, and more aligned with your real skin behavior.
             </p>
-            <div className="flex flex-col gap-2">
-              {q.options.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setAnswers(prev => ({ ...prev, [q.id]: opt.value }))}
-                  className={`text-left px-4 py-3 rounded-xl border transition-all ${
-                    answers[q.id] === opt.value
-                      ? 'border-white bg-white text-black font-medium'
-                      : 'border-white/20 text-gray-300 hover:border-white/50'
-                  }`}
-                >
-                  {opt.label}
-                </button>
+
+            <div className="mt-8 space-y-4">
+              {questions.map((question, index) => (
+                <div key={question.id} className="brand-card-soft p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c89b3c]">
+                    Step {index + 1}
+                  </p>
+                  <p className="mt-2 font-semibold text-[var(--ink)]">{question.question}</p>
+                </div>
               ))}
             </div>
-          </div>
-        ))}
-      </div>
+          </aside>
 
-      <button
-        onClick={handleNext}
-        disabled={!allAnswered}
-        className={`mt-8 w-full py-4 rounded-full font-semibold transition-all ${
-          allAnswered
-            ? 'bg-white text-black hover:bg-gray-100'
-            : 'bg-white/20 text-white/40 cursor-not-allowed'
-        }`}
-      >
-        분석 시작하기
-      </button>
+          <section className="space-y-5">
+            {questions.map((q, idx) => (
+              <div key={q.id} className="brand-card p-6 md:p-7">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">
+                  Question {idx + 1}
+                </p>
+                <p className="mt-3 text-xl font-semibold text-[var(--ink)]">
+                  {q.question}
+                </p>
+                <div className="mt-5 flex flex-col gap-3">
+                  {q.options.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setAnswers(prev => ({ ...prev, [q.id]: opt.value }))}
+                      className={`rounded-[22px] border px-5 py-4 text-left transition-all duration-200 ${
+                        answers[q.id] === opt.value
+                          ? 'border-[rgba(255,107,157,0.44)] bg-[linear-gradient(135deg,rgba(255,107,157,0.12),rgba(255,240,245,0.96))] shadow-[0_18px_30px_rgba(149,64,109,0.12)]'
+                          : 'border-[rgba(255,107,157,0.14)] bg-white/80 hover:-translate-y-0.5 hover:border-[rgba(255,107,157,0.34)] hover:shadow-[0_16px_26px_rgba(149,64,109,0.08)]'
+                      }`}
+                    >
+                      <span className="font-medium text-[var(--ink)]">{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            <button
+              onClick={handleNext}
+              disabled={!allAnswered}
+              className={`w-full py-4 font-semibold ${
+                allAnswered
+                  ? 'brand-button-primary'
+                  : 'cursor-not-allowed rounded-full bg-[rgba(255,179,209,0.45)] text-white/70'
+              }`}
+            >
+              Begin My Analysis
+            </button>
+          </section>
+        </div>
+      </div>
     </main>
   )
 }

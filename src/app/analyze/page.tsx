@@ -55,7 +55,6 @@ export default function AnalyzePage() {
   const [faceDetected, setFaceDetected] = useState(false)
   const router = useRouter()
 
-  // 카메라 시작
   useEffect(() => {
     async function startCamera() {
       try {
@@ -82,7 +81,6 @@ export default function AnalyzePage() {
     }
   }, [])
 
-  // MediaPipe 얼굴 감지
   useEffect(() => {
     if (!cameraReady) return
 
@@ -176,7 +174,6 @@ export default function AnalyzePage() {
         return true
       }
 
-      // 실시간 감지 루프
       const recoverDetector = async (error: unknown) => {
         if (isCancelled || isRecovering) return
 
@@ -233,10 +230,9 @@ export default function AnalyzePage() {
       await detect()
     }
 
-    loadFaceDetector()
-      .catch(error => {
-        console.error('FaceDetector 초기화 실패:', error)
-      })
+    loadFaceDetector().catch(error => {
+      console.error('FaceDetector 초기화 실패:', error)
+    })
 
     return () => {
       isCancelled = true
@@ -247,7 +243,6 @@ export default function AnalyzePage() {
     }
   }, [cameraReady])
 
-  // 사진 촬영
   const capture = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return
 
@@ -260,63 +255,98 @@ export default function AnalyzePage() {
     ctx.drawImage(video, 0, 0)
 
     const imageData = canvas.toDataURL('image/jpeg', 0.8)
-
-    // 분석 페이지로 이미지 전달
     sessionStorage.setItem('capturedImage', imageData)
     router.push('/survey')
   }, [router])
 
   return (
-    <main className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
-      <h1 className="text-white text-2xl font-bold mb-2">피부 분석</h1>
-      <p className="text-gray-400 text-sm mb-6">얼굴이 화면 중앙에 오도록 맞춰주세요</p>
+    <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
+      <div className="brand-shell">
+        <div className="mb-8 flex justify-center md:justify-start">
+          <div className="brand-mark">K-Beauty AI</div>
+        </div>
 
-      <div className="relative w-80 h-80 rounded-full overflow-hidden border-4 border-white/20">
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover scale-x-[-1]"
-          playsInline
-          muted
-        />
+        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+          <aside className="brand-card p-7 md:p-8">
+            <div className="brand-chip px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">
+              Live camera scan
+            </div>
+            <h1 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+              Frame your face in soft light
+            </h1>
+            <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
+              Keep your face centered, face forward, and let the camera capture your natural skin texture for a more refined K-beauty analysis.
+            </p>
 
-        {/* 얼굴 감지 표시 */}
-        <div className={`absolute inset-0 rounded-full border-4 transition-colors duration-300 ${
-          faceDetected ? 'border-green-400' : 'border-white/20'
-        }`} />
+            <div className="mt-8 space-y-4">
+              <div className="brand-card-soft p-5">
+                <p className="text-sm font-semibold text-[#d94d82]">Best capture setup</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Bright daylight, clean lens, and a calm front-facing angle create the clearest read.</p>
+              </div>
+              <div className="brand-card-soft p-5">
+                <p className="text-sm font-semibold text-[#d94d82]">What we read</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Hydration clues, surface shine, sensitivity signs, and overall balance.</p>
+              </div>
+            </div>
+          </aside>
+
+          <section className="brand-card p-6 md:p-8">
+            <div className="relative mx-auto mb-6 h-80 w-80 overflow-hidden rounded-[44px] border border-[rgba(255,107,157,0.22)] bg-[linear-gradient(180deg,rgba(255,255,255,0.65),rgba(255,240,245,0.9))] p-3 shadow-[0_28px_60px_rgba(149,64,109,0.14)]">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,179,209,0.28),transparent_58%)]" />
+              <div className="relative h-full overflow-hidden rounded-[36px] bg-[#fde8f1]">
+                <video
+                  ref={videoRef}
+                  className="h-full w-full scale-x-[-1] object-cover"
+                  playsInline
+                  muted
+                />
+                <div className={`absolute inset-4 rounded-[30px] border-[3px] transition-colors duration-300 ${
+                  faceDetected ? 'border-[#ff6b9d]' : 'border-white/60'
+                }`} />
+              </div>
+            </div>
+
+            <canvas ref={canvasRef} className="hidden" />
+
+            <div className="text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c89b3c]">
+                {status === 'detected' ? 'Face confirmed' : status === 'loading' ? 'Preparing camera' : 'Positioning guidance'}
+              </p>
+              {status === 'loading' && (
+                <p className="mt-3 text-base text-[var(--muted)]">카메라를 준비하고 있어요.</p>
+              )}
+              {status === 'ready' && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-lg font-semibold text-[var(--ink)]">얼굴을 프레임 중앙에 맞춰주세요</p>
+                  <p className="text-sm text-[var(--muted)]">밝은 곳에서 정면을 바라보면 더 정확해져요.</p>
+                </div>
+              )}
+              {status === 'detected' && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-lg font-semibold text-[#d94d82]">완벽해요. 피부를 읽을 준비가 됐어요.</p>
+                  <p className="text-sm text-[var(--muted)]">Capture를 눌러 다음 단계로 이동하세요.</p>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={capture}
+              disabled={!faceDetected}
+              className={`mt-8 w-full py-4 font-semibold ${
+                faceDetected
+                  ? 'brand-button-primary'
+                  : 'cursor-not-allowed rounded-full bg-[rgba(255,179,209,0.45)] text-white/70'
+              }`}
+            >
+              Capture My Skin
+            </button>
+
+            <p className="mt-4 text-center text-sm text-[var(--muted)]">
+              {faceDetected ? 'You are all set for your skin survey.' : 'If detection feels slow, step closer and avoid backlight.'}
+            </p>
+          </section>
+        </div>
       </div>
-
-      <canvas ref={canvasRef} className="hidden" />
-
-      {/* 상태 메시지 */}
-      <div className="mt-6 text-center">
-        {status === 'loading' && (
-          <p className="text-gray-400">카메라 시작 중...</p>
-        )}
-        {status === 'ready' && (
-          <div className="space-y-2">
-            <p className="text-gray-400">얼굴을 화면에 맞춰주세요</p>
-            <p className="text-gray-500 text-sm">밝은 곳에서 정면을 바라봐주세요</p>
-          </div>
-        )}
-        {status === 'detected' && (
-          <p className="text-green-400">얼굴이 감지됐어요!</p>
-        )}
-      </div>
-
-      {/* 촬영 버튼 */}
-      <button
-        onClick={capture}
-        disabled={!faceDetected}
-        className={`mt-8 w-20 h-20 rounded-full border-4 transition-all duration-300 ${
-          faceDetected
-            ? 'bg-white border-white scale-100 cursor-pointer hover:scale-105'
-            : 'bg-transparent border-white/30 scale-95 cursor-not-allowed'
-        }`}
-      />
-
-      <p className="text-gray-500 text-xs mt-4">
-        {faceDetected ? '버튼을 눌러 촬영하세요' : '밝은 곳에서 시도해보세요'}
-      </p>
     </main>
   )
 }
