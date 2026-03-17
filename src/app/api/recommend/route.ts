@@ -7,6 +7,7 @@ type RecommendedProduct = {
   id: string
   affiliate_url?: string | null
   global_affiliate_url?: string | null
+  similarity?: number | null
   [key: string]: unknown
 }
 
@@ -85,6 +86,22 @@ function buildUserProfileText(analysisResult: any) {
   return `Skin type: ${analysisResult.skin_type} | Hydration: ${analysisResult.scores.hydration} | Oil level: ${analysisResult.scores.oiliness} | Sensitivity: ${analysisResult.scores.sensitivity} | Concerns: ${analysisResult.concerns.join(', ')}`
 }
 
+function normalizeMatchScore(similarity: unknown) {
+  const value = typeof similarity === 'number' ? similarity : Number(similarity)
+
+  if (Number.isNaN(value)) {
+    return null
+  }
+
+  const weighted = Math.min(value * 1.5, 0.99)
+
+  if (weighted < 0.6) {
+    return null
+  }
+
+  return weighted
+}
+
 export async function POST(req: NextRequest) {
   try {
     const openai = getOpenAIClient()
@@ -140,15 +157,23 @@ export async function POST(req: NextRequest) {
       ])
     )
 
-    const mergedProducts = recommendedProducts.map((product) => {
-      const mergedUrls = productUrlMap.get(product.id)
+    const mergedProducts = recommendedProducts
+      .map<RecommendedProduct | null>((product) => {
+        const mergedUrls = productUrlMap.get(product.id)
+        const normalizedSimilarity = normalizeMatchScore(product.similarity)
 
-      return {
-        ...product,
-        affiliate_url: mergedUrls?.affiliate_url ?? product.affiliate_url ?? null,
-        global_affiliate_url: mergedUrls?.global_affiliate_url ?? product.global_affiliate_url ?? null,
-      }
-    })
+        if (normalizedSimilarity === null) {
+          return null
+        }
+
+        return {
+          ...product,
+          similarity: normalizedSimilarity,
+          affiliate_url: mergedUrls?.affiliate_url ?? product.affiliate_url ?? null,
+          global_affiliate_url: mergedUrls?.global_affiliate_url ?? product.global_affiliate_url ?? null,
+        }
+      })
+      .filter((product): product is RecommendedProduct => product !== null)
 
     return NextResponse.json({ products: mergedProducts })
   } catch (error: any) {

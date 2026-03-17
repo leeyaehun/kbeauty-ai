@@ -1,11 +1,25 @@
 'use client'
 
+import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
+
+  useEffect(() => {
+    const handlePopState = () => {
+      router.replace('/analyze')
+    }
+
+    window.history.pushState({ login: true }, '', window.location.href)
+    window.addEventListener('popstate', handlePopState)
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [router])
 
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({

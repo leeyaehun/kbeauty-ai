@@ -6,29 +6,29 @@ import { useRouter } from 'next/navigation'
 const questions = [
   {
     id: 'tightness',
-    question: 'After cleansing, does your skin feel tight?',
+    question: 'How does your skin feel a few hours after washing your face?',
     options: [
-      { value: 1, label: 'Not at all' },
-      { value: 2, label: 'A little' },
-      { value: 3, label: 'Very tight' },
+      { value: 3, label: 'My skin feels dry and uncomfortable' },
+      { value: 2, label: 'My skin feels normal and balanced' },
+      { value: 1, label: 'My skin feels greasy or shiny' },
     ]
   },
   {
     id: 'oiliness',
-    question: 'Does your T-zone get oily during the day?',
+    question: 'Where does your face get oily or shiny during the day?',
     options: [
-      { value: 1, label: 'Never' },
-      { value: 2, label: 'Sometimes' },
-      { value: 3, label: 'Always' },
+      { value: 1, label: 'It does not - my skin stays dry or normal' },
+      { value: 2, label: 'Only in the middle of my face (nose, forehead)' },
+      { value: 3, label: 'My whole face gets oily' },
     ]
   },
   {
     id: 'trouble',
-    question: 'How often do you get breakouts?',
+    question: 'How often do you get pimples, redness, or skin irritation?',
     options: [
-      { value: 1, label: 'Rarely' },
-      { value: 2, label: 'Sometimes' },
-      { value: 3, label: 'Often' },
+      { value: 1, label: 'Rarely or never' },
+      { value: 2, label: 'Sometimes (once or twice a month)' },
+      { value: 3, label: 'Often (almost every week)' },
     ]
   },
 ]
@@ -46,42 +46,16 @@ export default function SurveyPage() {
 
   return (
     <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
-      <div className="brand-shell">
-        <div className="mb-8 flex justify-center md:justify-start">
+      <div className="brand-shell max-w-3xl">
+        <div className="mb-8 flex justify-center">
           <div className="brand-mark">K-Beauty AI</div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-          <aside className="brand-card p-7 md:p-8">
-            <div className="brand-chip px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">
-              Skin quiz
-            </div>
-            <h1 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
-              Tell us how your skin feels 💗
-            </h1>
-            <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
-              These three answers help the camera analysis feel more human, more nuanced, and more aligned with your real skin behavior.
-            </p>
-
-            <div className="mt-8 space-y-4">
-              {questions.map((question, index) => (
-                <div key={question.id} className="brand-card-soft p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c89b3c]">
-                    Step {index + 1}
-                  </p>
-                  <p className="mt-2 font-semibold text-[var(--ink)]">{question.question}</p>
-                </div>
-              ))}
-            </div>
-          </aside>
-
-          <section className="space-y-5">
-            {questions.map((q, idx) => (
+        <section className="space-y-5">
+          <div className="space-y-5">
+            {questions.map((q) => (
               <div key={q.id} className="brand-card p-6 md:p-7">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">
-                  Question {idx + 1}
-                </p>
-                <p className="mt-3 text-xl font-semibold text-[var(--ink)]">
+                <p className="text-xl font-semibold text-[var(--ink)]">
                   {q.question}
                 </p>
                 <div className="mt-5 flex flex-col gap-3">
@@ -113,8 +87,8 @@ export default function SurveyPage() {
             >
                 Start Skin Analysis
             </button>
-          </section>
-        </div>
+          </div>
+        </section>
       </div>
     </main>
   )
