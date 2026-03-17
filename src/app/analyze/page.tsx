@@ -4,18 +4,37 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 
 const MEDIAPIPE_CPU_INFO_LOG = 'INFO: Created TensorFlow Lite XNNPACK delegate for CPU.'
+const MEDIAPIPE_GPU_FALLBACK_LOG_PATTERNS = [
+  'StartGraph failed: INTERNAL: Service "kGpuService"',
+  'emscripten_webgl_create_context() returned error 0',
+  'gl_graph_runner_internal.cc',
+]
 
-function shouldMuteMediapipeCpuInfo(args: unknown[]) {
+function shouldMuteMediapipeLog(args: unknown[]) {
   return args.some(
-    arg => typeof arg === 'string' && arg.includes(MEDIAPIPE_CPU_INFO_LOG)
+    arg =>
+      typeof arg === 'string' &&
+      (
+        arg.includes(MEDIAPIPE_CPU_INFO_LOG) ||
+        MEDIAPIPE_GPU_FALLBACK_LOG_PATTERNS.some(pattern => arg.includes(pattern))
+      )
   )
 }
 
-async function withMutedMediapipeCpuInfo<T>(operation: () => Promise<T> | T): Promise<T> {
+function canUseWebGL() {
+  const canvas = document.createElement('canvas')
+  return Boolean(
+    canvas.getContext('webgl2') ||
+    canvas.getContext('webgl') ||
+    canvas.getContext('experimental-webgl')
+  )
+}
+
+async function withMutedMediapipeLogs<T>(operation: () => Promise<T> | T): Promise<T> {
   const originalConsoleError = console.error
 
   console.error = (...args: unknown[]) => {
-    if (shouldMuteMediapipeCpuInfo(args)) {
+    if (shouldMuteMediapipeLog(args)) {
       return
     }
     originalConsoleError(...args)
@@ -67,7 +86,18 @@ export default function AnalyzePage() {
   useEffect(() => {
     if (!cameraReady) return
 
-    let faceDetector: { detectForVideo: (video: HTMLVideoElement, timestamp: number) => { detections: unknown[] }, close: () => void } | null = null
+    type Detection = {
+      categories?: Array<{ score?: number }>
+    }
+
+    type DetectionResult = {
+      detections: Detection[]
+    }
+
+    type Delegate = 'GPU' | 'CPU'
+
+    let faceDetector: { detectForVideo: (video: HTMLVideoElement, timestamp: number) => DetectionResult, close: () => void } | null = null
+    let activeDelegate: Delegate | null = null
     let animationFrameId: number | null = null
     let isCancelled = false
     let isRecovering = false
@@ -77,8 +107,9 @@ export default function AnalyzePage() {
 
       const detectorToClose = faceDetector
       faceDetector = null
+      activeDelegate = null
 
-      await withMutedMediapipeCpuInfo(() => {
+      await withMutedMediapipeLogs(() => {
         detectorToClose.close()
       })
     }
@@ -90,29 +121,37 @@ export default function AnalyzePage() {
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm'
       )
 
-      const createFaceDetector = async (delegate: 'GPU' | 'CPU') => {
-        return withMutedMediapipeCpuInfo(() =>
+      const createFaceDetector = async (delegate: Delegate) => {
+        return withMutedMediapipeLogs(() =>
           FaceDetector.createFromOptions(vision, {
             baseOptions: {
               modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
               delegate
             },
             runningMode: 'VIDEO',
-            minDetectionConfidence: 0.5,
+            minDetectionConfidence: 0.3,
           })
         )
       }
 
-      const createFaceDetectorWithFallback = async (preferredDelegate: 'GPU' | 'CPU') => {
+      const createFaceDetectorWithFallback = async (preferredDelegate: Delegate) => {
+        if (preferredDelegate === 'GPU' && !canUseWebGL()) {
+          console.warn('WebGL 컨텍스트를 만들 수 없어 CPU delegate로 폴백합니다.')
+          const detector = await createFaceDetector('CPU')
+          return { detector, delegate: 'CPU' as const }
+        }
+
         try {
-          return await createFaceDetector(preferredDelegate)
+          const detector = await createFaceDetector(preferredDelegate)
+          return { detector, delegate: preferredDelegate }
         } catch (error) {
           if (preferredDelegate === 'CPU') {
             throw error
           }
 
           console.warn('GPU delegate 초기화 실패, CPU delegate로 폴백합니다.', error)
-          return createFaceDetector('CPU')
+          const detector = await createFaceDetector('CPU')
+          return { detector, delegate: 'CPU' as const }
         }
       }
 
@@ -122,9 +161,12 @@ export default function AnalyzePage() {
         })
       }
 
-      const initializeDetector = async () => {
+      const initializeDetector = async (preferredDelegate: Delegate = 'GPU') => {
         await closeFaceDetector()
-        faceDetector = await createFaceDetectorWithFallback('CPU')
+        const created = await createFaceDetectorWithFallback(preferredDelegate)
+        faceDetector = created.detector
+        activeDelegate = created.delegate
+        console.info(`FaceDetector initialized with ${activeDelegate} delegate`)
 
         if (isCancelled || !faceDetector) {
           await closeFaceDetector()
@@ -139,10 +181,11 @@ export default function AnalyzePage() {
         if (isCancelled || isRecovering) return
 
         isRecovering = true
-        console.warn('FaceDetector 추론 실패, CPU detector를 다시 초기화합니다.', error)
+        const fallbackDelegate: Delegate = activeDelegate === 'GPU' ? 'CPU' : 'CPU'
+        console.warn(`FaceDetector 추론 실패, ${fallbackDelegate} delegate로 다시 초기화합니다.`, error)
 
         try {
-          const initialized = await initializeDetector()
+          const initialized = await initializeDetector(fallbackDelegate)
           if (initialized && !isCancelled) {
             scheduleDetect()
           }
@@ -168,6 +211,8 @@ export default function AnalyzePage() {
 
         try {
           const results = detector.detectForVideo(video, Date.now())
+          const confidence = results.detections[0]?.categories?.[0]?.score ?? 0
+          console.debug('Face detection confidence:', confidence)
           const detected = results.detections.length > 0
           setFaceDetected(detected)
           if (detected) setStatus('detected')
@@ -248,7 +293,10 @@ export default function AnalyzePage() {
           <p className="text-gray-400">카메라 시작 중...</p>
         )}
         {status === 'ready' && (
-          <p className="text-gray-400">얼굴을 화면에 맞춰주세요</p>
+          <div className="space-y-2">
+            <p className="text-gray-400">얼굴을 화면에 맞춰주세요</p>
+            <p className="text-gray-500 text-sm">밝은 곳에서 정면을 바라봐주세요</p>
+          </div>
         )}
         {status === 'detected' && (
           <p className="text-green-400">얼굴이 감지됐어요!</p>
