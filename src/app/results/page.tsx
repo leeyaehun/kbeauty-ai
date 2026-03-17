@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+const ANALYZE_TIMEOUT_MS = 30_000
+const ANALYZE_MAX_RETRIES = 1
+
 const SKIN_TYPE_KO: Record<string, string> = {
   dry: '건성',
   oily: '지성',
@@ -33,6 +36,88 @@ type AnalysisResult = {
   confidence: number
 }
 
+function safeParseSessionStorage<T>(key: string, fallback: T) {
+  const value = sessionStorage.getItem(key)
+
+  if (!value) {
+    return fallback
+  }
+
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
+async function parseJsonResponse(response: Response) {
+  const text = await response.text()
+
+  if (!text) {
+    return {}
+  }
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { error: text }
+  }
+}
+
+async function fetchAnalyzeWithRetry(imageBase64: string, surveyAnswers: Record<string, number>) {
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt <= ANALYZE_MAX_RETRIES; attempt += 1) {
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), ANALYZE_TIMEOUT_MS)
+
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64,
+          surveyAnswers,
+        }),
+        signal: controller.signal,
+      })
+
+      const data = await parseJsonResponse(response)
+
+      if (!response.ok) {
+        const message = typeof data.error === 'string'
+          ? data.error
+          : `분석 요청이 실패했어요. (HTTP ${response.status})`
+
+        if (attempt < ANALYZE_MAX_RETRIES && response.status >= 500) {
+          lastError = new Error(message)
+          continue
+        }
+
+        throw new Error(message)
+      }
+
+      return data
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했어요.'
+      const normalizedError =
+        error instanceof DOMException && error.name === 'AbortError'
+          ? new Error('분석 요청이 30초 안에 완료되지 않았어요. 네트워크 상태를 확인하고 다시 시도해주세요.')
+          : new Error(message)
+
+      lastError = normalizedError
+
+      if (attempt < ANALYZE_MAX_RETRIES) {
+        continue
+      }
+    } finally {
+      window.clearTimeout(timeoutId)
+    }
+  }
+
+  throw lastError ?? new Error('분석 실패')
+}
+
 export default function ResultsPage() {
   const router = useRouter()
   const [result, setResult] = useState<AnalysisResult | null>(null)
@@ -42,48 +127,39 @@ export default function ResultsPage() {
   useEffect(() => {
     async function analyze() {
       const imageData = sessionStorage.getItem('capturedImage')
-      const surveyAnswers = JSON.parse(sessionStorage.getItem('surveyAnswers') || '{}')
+      const surveyAnswers = safeParseSessionStorage<Record<string, number>>('surveyAnswers', {})
 
       if (!imageData) {
-        router.push('/analyze')
+        setError('촬영 이미지가 저장되지 않았어요. 카메라 화면에서 다시 촬영해주세요.')
+        setLoading(false)
         return
       }
 
       try {
-        const res = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64: imageData,
-            surveyAnswers,
-          })
-        })
-
-        const data = await res.json()
-
-        if (!res.ok) {
-          setError(data.error || '분석 실패')
-          return
-        }
+        const data = await fetchAnalyzeWithRetry(imageData, surveyAnswers)
 
         setResult(data)
         sessionStorage.setItem('analysisResult', JSON.stringify(data))
 
-        const { createClient } = await import('@/lib/supabase')
-        const supabase = createClient()
-        const { data: { user } } = await supabase.auth.getUser()
+        try {
+          const { createClient } = await import('@/lib/supabase')
+          const supabase = createClient()
+          const { data: { user } } = await supabase.auth.getUser()
 
-        if (user) {
-          await supabase.from('analyses').insert({
-            user_id: user.id,
-            skin_type: data.skin_type,
-            scores: data.scores,
-            concerns: data.concerns,
-            image_url: imageData,
-          })
+          if (user) {
+            await supabase.from('analyses').insert({
+              user_id: user.id,
+              skin_type: data.skin_type,
+              scores: data.scores,
+              concerns: data.concerns,
+              image_url: imageData,
+            })
+          }
+        } catch (historyError) {
+          console.error('분석 히스토리 저장 실패:', historyError)
         }
-      } catch {
-        setError('네트워크 오류가 발생했어요')
+      } catch (error) {
+        setError(error instanceof Error ? error.message : '분석 실패')
       } finally {
         setLoading(false)
       }

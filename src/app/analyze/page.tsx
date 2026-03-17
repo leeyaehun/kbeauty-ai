@@ -4,6 +4,7 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 
 const MEDIAPIPE_CPU_INFO_LOG = 'INFO: Created TensorFlow Lite XNNPACK delegate for CPU.'
+const MAX_CAPTURE_BYTES = 1024 * 1024
 const MEDIAPIPE_GPU_FALLBACK_LOG_PATTERNS = [
   'StartGraph failed: INTERNAL: Service "kGpuService"',
   'emscripten_webgl_create_context() returned error 0',
@@ -47,12 +48,90 @@ async function withMutedMediapipeLogs<T>(operation: () => Promise<T> | T): Promi
   }
 }
 
+function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (!blob) {
+        reject(new Error('이미지 변환에 실패했어요. 다시 시도해주세요.'))
+        return
+      }
+
+      resolve(blob)
+    }, 'image/jpeg', quality)
+  })
+}
+
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+        return
+      }
+
+      reject(new Error('이미지 저장 형식 변환에 실패했어요.'))
+    }
+
+    reader.onerror = () => {
+      reject(new Error('이미지 저장 중 읽기 오류가 발생했어요.'))
+    }
+
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function compressCanvasForUpload(sourceCanvas: HTMLCanvasElement) {
+  const scales = [1, 0.9, 0.8, 0.7, 0.6]
+  const qualities = [0.82, 0.72, 0.62, 0.52, 0.42]
+  let smallestBlob: Blob | null = null
+
+  for (const scale of scales) {
+    const targetCanvas = document.createElement('canvas')
+    targetCanvas.width = Math.max(320, Math.round(sourceCanvas.width * scale))
+    targetCanvas.height = Math.max(320, Math.round(sourceCanvas.height * scale))
+
+    const targetContext = targetCanvas.getContext('2d')
+
+    if (!targetContext) {
+      throw new Error('이미지 압축 준비에 실패했어요.')
+    }
+
+    targetContext.drawImage(sourceCanvas, 0, 0, targetCanvas.width, targetCanvas.height)
+
+    for (const quality of qualities) {
+      const blob = await canvasToBlob(targetCanvas, quality)
+
+      if (!smallestBlob || blob.size < smallestBlob.size) {
+        smallestBlob = blob
+      }
+
+      if (blob.size <= MAX_CAPTURE_BYTES) {
+        return blobToDataUrl(blob)
+      }
+    }
+  }
+
+  if (!smallestBlob) {
+    throw new Error('이미지 압축에 실패했어요.')
+  }
+
+  if (smallestBlob.size > MAX_CAPTURE_BYTES) {
+    throw new Error('촬영 이미지가 너무 커서 저장할 수 없어요. 조금 더 가까이서 다시 촬영해주세요.')
+  }
+
+  return blobToDataUrl(smallestBlob)
+}
+
 export default function AnalyzePage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'detected' | 'captured'>('loading')
   const [cameraReady, setCameraReady] = useState(false)
   const [faceDetected, setFaceDetected] = useState(false)
+  const [captureError, setCaptureError] = useState('')
+  const [isCapturing, setIsCapturing] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -243,20 +322,43 @@ export default function AnalyzePage() {
     }
   }, [cameraReady])
 
-  const capture = useCallback(() => {
+  const capture = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return
 
-    const canvas = canvasRef.current
-    const video = videoRef.current
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
+    try {
+      setCaptureError('')
+      setIsCapturing(true)
 
-    const ctx = canvas.getContext('2d')!
-    ctx.drawImage(video, 0, 0)
+      const canvas = canvasRef.current
+      const video = videoRef.current
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
 
-    const imageData = canvas.toDataURL('image/jpeg', 0.8)
-    sessionStorage.setItem('capturedImage', imageData)
-    router.push('/survey')
+      const ctx = canvas.getContext('2d')
+
+      if (!ctx) {
+        throw new Error('카메라 프레임을 읽지 못했어요. 다시 시도해주세요.')
+      }
+
+      ctx.drawImage(video, 0, 0)
+
+      const imageData = await compressCanvasForUpload(canvas)
+      sessionStorage.setItem('capturedImage', imageData)
+
+      const storedImage = sessionStorage.getItem('capturedImage')
+
+      if (!storedImage) {
+        throw new Error('촬영 이미지를 저장하지 못했어요. 브라우저 저장 공간을 확인해주세요.')
+      }
+
+      setStatus('captured')
+      router.push('/survey')
+    } catch (error) {
+      console.error('촬영 저장 실패:', error)
+      setCaptureError(error instanceof Error ? error.message : '촬영 이미지를 저장하지 못했어요.')
+    } finally {
+      setIsCapturing(false)
+    }
   }, [router])
 
   return (
@@ -331,19 +433,22 @@ export default function AnalyzePage() {
 
             <button
               onClick={capture}
-              disabled={!faceDetected}
+              disabled={!faceDetected || isCapturing}
               className={`mt-8 w-full py-4 font-semibold ${
-                faceDetected
+                faceDetected && !isCapturing
                   ? 'brand-button-primary'
                   : 'cursor-not-allowed rounded-full bg-[rgba(255,179,209,0.45)] text-white/70'
               }`}
             >
-              Capture My Skin
+              {isCapturing ? 'Saving your photo...' : 'Capture My Skin'}
             </button>
 
             <p className="mt-4 text-center text-sm text-[var(--muted)]">
               {faceDetected ? 'You are all set for your skin survey.' : 'If detection feels slow, step closer and avoid backlight.'}
             </p>
+            {captureError && (
+              <p className="mt-3 text-center text-sm text-[#d94d82]">{captureError}</p>
+            )}
           </section>
         </div>
       </div>
