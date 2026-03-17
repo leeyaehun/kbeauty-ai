@@ -178,6 +178,7 @@ export default function ResultsPage() {
         </div>
       )}
 
+      {/* 버튼 */}
       <div className="flex flex-col gap-3">
         <button
           onClick={() => router.push('/recommend')}
@@ -185,9 +186,30 @@ export default function ResultsPage() {
         >
           맞춤 제품 추천받기
         </button>
+
+        {/* 공유 버튼 */}
+        <button
+          onClick={() => {
+            const url = `${window.location.origin}/api/og?skin_type=${result.skin_type}&hydration=${result.scores.hydration}&oiliness=${result.scores.oiliness}&sensitivity=${result.scores.sensitivity}`
+            if (navigator.share) {
+              navigator.share({
+                title: 'K-Beauty AI 피부 분석 결과',
+                text: `내 피부 타입은 ${SKIN_TYPE_KO[result.skin_type]}! K-Beauty AI로 분석해봤어요`,
+                url: window.location.origin,
+              })
+            } else {
+              navigator.clipboard.writeText(window.location.origin)
+              alert('링크가 복사됐어요!')
+            }
+          }}
+          className="w-full py-4 border border-white/20 text-white rounded-full font-semibold hover:border-white/50 transition"
+        >
+          결과 공유하기
+        </button>
+
         <button
           onClick={() => router.push('/analyze')}
-          className="w-full py-4 border border-white/20 text-white rounded-full font-semibold hover:border-white/50 transition"
+          className="w-full py-4 border border-white/10 text-gray-400 rounded-full font-semibold hover:border-white/30 transition"
         >
           다시 분석하기
         </button>
