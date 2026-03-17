@@ -195,9 +195,28 @@ export default function RecommendPage() {
         ))}
       </div>
 
+      {/* Pro 업그레이드 버튼 */}
+      <div className="mt-6 p-5 border border-white/20 rounded-2xl text-center">
+        <p className="text-white font-semibold mb-1">K-Beauty AI Pro</p>
+        <p className="text-gray-400 text-sm mb-4">
+          무제한 분석 · 히스토리 저장 · 제품 6개 추천
+        </p>
+        <button
+          onClick={async () => {
+            const res = await fetch('/api/stripe/checkout', { method: 'POST' })
+            const data = await res.json()
+            if (data.url) window.location.href = data.url
+            else alert(data.error || '오류가 발생했어요')
+          }}
+          className="w-full py-3 bg-white text-black rounded-full font-semibold hover:bg-gray-100 transition"
+        >
+          $9/월 Pro 시작하기
+        </button>
+      </div>
+
       <button
         onClick={() => router.push('/analyze')}
-        className="w-full mt-6 py-4 border border-white/20 text-white rounded-full font-semibold hover:border-white/50 transition"
+        className="w-full mt-4 py-4 border border-white/20 text-white rounded-full font-semibold hover:border-white/50 transition"
       >
         다시 분석하기
       </button>
