@@ -50,34 +50,6 @@ function safeParseSessionStorage<T>(key: string, fallback: T) {
   }
 }
 
-async function copyTextToClipboard(text: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
-  }
-
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.setAttribute('readonly', '')
-  textarea.style.position = 'fixed'
-  textarea.style.top = '0'
-  textarea.style.left = '0'
-  textarea.style.opacity = '0'
-  textarea.style.pointerEvents = 'none'
-
-  document.body.appendChild(textarea)
-  textarea.focus()
-  textarea.select()
-  textarea.setSelectionRange(0, textarea.value.length)
-
-  const copied = document.execCommand('copy')
-  document.body.removeChild(textarea)
-
-  if (!copied) {
-    throw new Error('Clipboard copy failed.')
-  }
-}
-
 async function parseJsonResponse(response: Response) {
   const text = await response.text()
 
@@ -151,17 +123,6 @@ export default function ResultsPage() {
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [toastMessage, setToastMessage] = useState('')
-
-  useEffect(() => {
-    if (!toastMessage) {
-      return
-    }
-
-    const timeoutId = window.setTimeout(() => setToastMessage(''), 2200)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [toastMessage])
 
   useEffect(() => {
     async function analyze() {
@@ -250,12 +211,6 @@ export default function ResultsPage() {
 
   return (
     <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
-      {toastMessage && (
-        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_30px_rgba(17,24,39,0.24)]">
-          {toastMessage}
-        </div>
-      )}
-
       <div className="brand-shell">
         <div className="mb-8 flex justify-center md:justify-start">
           <div className="brand-mark">K-Beauty AI</div>
@@ -349,25 +304,17 @@ export default function ResultsPage() {
                 </button>
 
                 <button
-                  onClick={async () => {
+                  onClick={() => {
                     const shareUrl = `${window.location.origin}/api/og?skin_type=${result.skin_type}&hydration=${result.scores.hydration}&oiliness=${result.scores.oiliness}&sensitivity=${result.scores.sensitivity}`
-
-                    try {
-                      if (navigator.share) {
-                        await navigator.share({
-                          title: 'K-Beauty AI Skin Analysis Results',
-                          text: `My skin type is ${SKIN_TYPE_KO[result.skin_type]}! I just tried K-Beauty AI 💖`,
-                          url: shareUrl,
-                        })
-                        return
-                      }
-                    } catch {}
-
-                    try {
-                      await copyTextToClipboard(shareUrl)
-                      setToastMessage('Link copied!')
-                    } catch {
-                      setToastMessage('Sharing failed. Please try again.')
+                    if (navigator.share) {
+                      navigator.share({
+                        title: 'K-Beauty AI Skin Analysis Results',
+                        text: `My skin type is ${SKIN_TYPE_KO[result.skin_type]}! I just tried K-Beauty AI 💖`,
+                        url: shareUrl,
+                      })
+                    } else {
+                      navigator.clipboard.writeText(shareUrl)
+                      alert('Link copied!')
                     }
                   }}
                   className="brand-button-secondary w-full py-4 font-semibold"
