@@ -7,6 +7,7 @@ export default function AnalyzePage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'detected' | 'captured'>('loading')
+  const [cameraReady, setCameraReady] = useState(false)
   const [faceDetected, setFaceDetected] = useState(false)
   const router = useRouter()
 
@@ -20,6 +21,7 @@ export default function AnalyzePage() {
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           videoRef.current.play()
+          setCameraReady(true)
           setStatus('ready')
         }
       } catch (e) {
@@ -38,11 +40,12 @@ export default function AnalyzePage() {
 
   // MediaPipe 얼굴 감지
   useEffect(() => {
-    if (status !== 'ready') return
+    if (!cameraReady) return
 
     let faceDetector: { detectForVideo: (video: HTMLVideoElement, timestamp: number) => { detections: unknown[] }, close: () => void } | null = null
     let animationFrameId: number | null = null
     let isCancelled = false
+    let isRecovering = false
 
     async function loadFaceDetector() {
       const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision')
@@ -75,35 +78,77 @@ export default function AnalyzePage() {
         }
       }
 
-      faceDetector = await createFaceDetectorWithFallback('CPU')
+      const scheduleDetect = () => {
+        animationFrameId = requestAnimationFrame(() => {
+          void detect()
+        })
+      }
 
-      if (isCancelled || !faceDetector) {
+      const initializeDetector = async () => {
         faceDetector?.close()
-        return
+        faceDetector = await createFaceDetectorWithFallback('CPU')
+
+        if (isCancelled || !faceDetector) {
+          faceDetector?.close()
+          faceDetector = null
+          return false
+        }
+
+        return true
       }
 
       // 실시간 감지 루프
-      const detect = () => {
+      const recoverDetector = async (error: unknown) => {
+        if (isCancelled || isRecovering) return
+
+        isRecovering = true
+        console.warn('FaceDetector 추론 실패, CPU detector를 다시 초기화합니다.', error)
+
+        try {
+          const initialized = await initializeDetector()
+          if (initialized && !isCancelled) {
+            scheduleDetect()
+          }
+        } catch (recoveryError) {
+          console.error('FaceDetector 재초기화 실패:', recoveryError)
+        } finally {
+          isRecovering = false
+        }
+      }
+
+      const detect = async () => {
         if (isCancelled) return
 
         const video = videoRef.current
         const detector = faceDetector
 
         if (!video || video.readyState < 2 || !detector) {
-          animationFrameId = requestAnimationFrame(detect)
+          if (!isRecovering) {
+            scheduleDetect()
+          }
           return
         }
 
-        const results = detector.detectForVideo(video, Date.now())
-        const detected = results.detections.length > 0
-        setFaceDetected(detected)
-        if (detected) setStatus('detected')
-        else setStatus('ready')
+        try {
+          const results = detector.detectForVideo(video, Date.now())
+          const detected = results.detections.length > 0
+          setFaceDetected(detected)
+          if (detected) setStatus('detected')
+          else setStatus('ready')
+        } catch (error) {
+          setFaceDetected(false)
+          setStatus('ready')
+          await recoverDetector(error)
+          return
+        }
 
-        animationFrameId = requestAnimationFrame(detect)
+        scheduleDetect()
       }
 
-      detect()
+      const initialized = await initializeDetector()
+      if (!initialized) return
+
+      await detect()
     }
 
     loadFaceDetector()
@@ -118,7 +163,7 @@ export default function AnalyzePage() {
       }
       faceDetector?.close()
     }
-  }, [status === 'ready'])
+  }, [cameraReady])
 
   // 사진 촬영
   const capture = useCallback(() => {
