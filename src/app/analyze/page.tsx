@@ -3,6 +3,31 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 
+const MEDIAPIPE_CPU_INFO_LOG = 'INFO: Created TensorFlow Lite XNNPACK delegate for CPU.'
+
+function shouldMuteMediapipeCpuInfo(args: unknown[]) {
+  return args.some(
+    arg => typeof arg === 'string' && arg.includes(MEDIAPIPE_CPU_INFO_LOG)
+  )
+}
+
+async function withMutedMediapipeCpuInfo<T>(operation: () => Promise<T> | T): Promise<T> {
+  const originalConsoleError = console.error
+
+  console.error = (...args: unknown[]) => {
+    if (shouldMuteMediapipeCpuInfo(args)) {
+      return
+    }
+    originalConsoleError(...args)
+  }
+
+  try {
+    return await operation()
+  } finally {
+    console.error = originalConsoleError
+  }
+}
+
 export default function AnalyzePage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -47,6 +72,17 @@ export default function AnalyzePage() {
     let isCancelled = false
     let isRecovering = false
 
+    const closeFaceDetector = async () => {
+      if (!faceDetector) return
+
+      const detectorToClose = faceDetector
+      faceDetector = null
+
+      await withMutedMediapipeCpuInfo(() => {
+        detectorToClose.close()
+      })
+    }
+
     async function loadFaceDetector() {
       const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision')
 
@@ -55,14 +91,16 @@ export default function AnalyzePage() {
       )
 
       const createFaceDetector = async (delegate: 'GPU' | 'CPU') => {
-        return FaceDetector.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
-            delegate
-          },
-          runningMode: 'VIDEO',
-          minDetectionConfidence: 0.5,
-        })
+        return withMutedMediapipeCpuInfo(() =>
+          FaceDetector.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+              delegate
+            },
+            runningMode: 'VIDEO',
+            minDetectionConfidence: 0.5,
+          })
+        )
       }
 
       const createFaceDetectorWithFallback = async (preferredDelegate: 'GPU' | 'CPU') => {
@@ -85,12 +123,11 @@ export default function AnalyzePage() {
       }
 
       const initializeDetector = async () => {
-        faceDetector?.close()
+        await closeFaceDetector()
         faceDetector = await createFaceDetectorWithFallback('CPU')
 
         if (isCancelled || !faceDetector) {
-          faceDetector?.close()
-          faceDetector = null
+          await closeFaceDetector()
           return false
         }
 
@@ -161,7 +198,7 @@ export default function AnalyzePage() {
       if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId)
       }
-      faceDetector?.close()
+      void closeFaceDetector()
     }
   }, [cameraReady])
 
