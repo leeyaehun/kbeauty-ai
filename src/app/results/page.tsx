@@ -7,20 +7,20 @@ const ANALYZE_TIMEOUT_MS = 30_000
 const ANALYZE_MAX_RETRIES = 1
 
 const SKIN_TYPE_KO: Record<string, string> = {
-  dry: '건성',
-  oily: '지성',
-  combination: '복합성',
-  sensitive: '민감성',
-  normal: '중성',
+  dry: 'Dry',
+  oily: 'Oily',
+  combination: 'Combination',
+  sensitive: 'Sensitive',
+  normal: 'Normal',
 }
 
 const CONCERN_KO: Record<string, string> = {
-  acne: '여드름',
-  hyperpigmentation: '색소침착',
-  wrinkles: '주름',
-  pores: '모공',
-  redness: '붉은기',
-  dryness: '건조함',
+  acne: 'Acne',
+  hyperpigmentation: 'Pigmentation',
+  wrinkles: 'Fine Lines',
+  pores: 'Pores',
+  redness: 'Redness',
+  dryness: 'Dryness',
 }
 
 type AnalysisResult = {
@@ -87,7 +87,7 @@ async function fetchAnalyzeWithRetry(imageBase64: string, surveyAnswers: Record<
       if (!response.ok) {
         const message = typeof data.error === 'string'
           ? data.error
-          : `분석 요청이 실패했어요. (HTTP ${response.status})`
+          : `The analysis request failed. (HTTP ${response.status})`
 
         if (attempt < ANALYZE_MAX_RETRIES && response.status >= 500) {
           lastError = new Error(message)
@@ -99,10 +99,10 @@ async function fetchAnalyzeWithRetry(imageBase64: string, surveyAnswers: Record<
 
       return data
     } catch (error) {
-      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했어요.'
+      const message = error instanceof Error ? error.message : 'An unknown error occurred.'
       const normalizedError =
         error instanceof DOMException && error.name === 'AbortError'
-          ? new Error('분석 요청이 30초 안에 완료되지 않았어요. 네트워크 상태를 확인하고 다시 시도해주세요.')
+          ? new Error('The analysis request did not finish within 30 seconds. Please check your connection and try again.')
           : new Error(message)
 
       lastError = normalizedError
@@ -115,7 +115,7 @@ async function fetchAnalyzeWithRetry(imageBase64: string, surveyAnswers: Record<
     }
   }
 
-  throw lastError ?? new Error('분석 실패')
+  throw lastError ?? new Error('Skin analysis failed.')
 }
 
 export default function ResultsPage() {
@@ -130,7 +130,7 @@ export default function ResultsPage() {
       const surveyAnswers = safeParseSessionStorage<Record<string, number>>('surveyAnswers', {})
 
       if (!imageData) {
-        setError('촬영 이미지가 저장되지 않았어요. 카메라 화면에서 다시 촬영해주세요.')
+        setError('Your selfie wasn’t saved. Please head back to the camera and try again.')
         setLoading(false)
         return
       }
@@ -142,9 +142,9 @@ export default function ResultsPage() {
         sessionStorage.setItem('analysisResult', JSON.stringify(data))
 
         try {
-          const { createClient } = await import('@/lib/supabase')
-          const supabase = createClient()
-          const { data: { user } } = await supabase.auth.getUser()
+        const { createClient } = await import('@/lib/supabase')
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
 
           if (user) {
             await supabase.from('analyses').insert({
@@ -156,10 +156,10 @@ export default function ResultsPage() {
             })
           }
         } catch (historyError) {
-          console.error('분석 히스토리 저장 실패:', historyError)
+          console.error('Analysis history save failed:', historyError)
         }
       } catch (error) {
-        setError(error instanceof Error ? error.message : '분석 실패')
+        setError(error instanceof Error ? error.message : 'Skin analysis failed.')
       } finally {
         setLoading(false)
       }
@@ -174,7 +174,7 @@ export default function ResultsPage() {
         <div className="brand-card flex max-w-md items-center gap-4 px-6 py-5">
           <div className="h-10 w-10 rounded-full border-4 border-[#ffb3d1]/60 border-t-[#ff6b9d] animate-spin" />
           <div>
-            <p className="text-sm font-semibold text-[#d94d82]">Analyzing your glow</p>
+            <p className="text-sm font-semibold text-[#d94d82]">Analyzing your glow ✨</p>
             <p className="text-sm text-[var(--muted)]">AI is mapping your skin profile now.</p>
           </div>
         </div>
@@ -193,7 +193,7 @@ export default function ResultsPage() {
             onClick={() => router.push('/analyze')}
             className="brand-button-primary mt-8 px-8 py-4 font-semibold"
           >
-            Return to camera
+            Back to Camera
           </button>
         </div>
       </main>
@@ -203,10 +203,10 @@ export default function ResultsPage() {
   if (!result) return null
 
   const scores = [
-    { label: '수분도', value: result.scores.hydration, color: '#60a5fa', glow: 'from-[#cfe6ff] to-[#ffffff]' },
-    { label: '유분도', value: result.scores.oiliness, color: '#e7b300', glow: 'from-[#fff0be] to-[#ffffff]' },
-    { label: '민감도', value: result.scores.sensitivity, color: '#f87171', glow: 'from-[#ffd8d8] to-[#ffffff]' },
-    { label: '색소침착', value: result.scores.pigmentation, color: '#c084fc', glow: 'from-[#f1e2ff] to-[#ffffff]' },
+    { label: 'Hydration', value: result.scores.hydration, color: '#60a5fa', glow: 'from-[#cfe6ff] to-[#ffffff]' },
+    { label: 'Oil Level', value: result.scores.oiliness, color: '#e7b300', glow: 'from-[#fff0be] to-[#ffffff]' },
+    { label: 'Sensitivity', value: result.scores.sensitivity, color: '#f87171', glow: 'from-[#ffd8d8] to-[#ffffff]' },
+    { label: 'Pigmentation', value: result.scores.pigmentation, color: '#c084fc', glow: 'from-[#f1e2ff] to-[#ffffff]' },
   ]
 
   return (
@@ -300,7 +300,7 @@ export default function ResultsPage() {
                   onClick={() => router.push('/recommend')}
                   className="brand-button-primary w-full py-4 font-semibold"
                 >
-                  Explore My Product Matches
+                  Personalized Product Recommendations
                 </button>
 
                 <button
@@ -308,18 +308,18 @@ export default function ResultsPage() {
                     const shareUrl = `${window.location.origin}/api/og?skin_type=${result.skin_type}&hydration=${result.scores.hydration}&oiliness=${result.scores.oiliness}&sensitivity=${result.scores.sensitivity}`
                     if (navigator.share) {
                       navigator.share({
-                        title: 'K-Beauty AI 피부 분석 결과',
-                        text: `내 피부 타입은 ${SKIN_TYPE_KO[result.skin_type]}! K-Beauty AI로 분석해봤어요`,
+                        title: 'K-Beauty AI Skin Analysis Results',
+                        text: `My skin type is ${SKIN_TYPE_KO[result.skin_type]}! I just tried K-Beauty AI 💖`,
                         url: shareUrl,
                       })
                     } else {
                       navigator.clipboard.writeText(shareUrl)
-                      alert('링크가 복사됐어요!')
+                      alert('Link copied!')
                     }
                   }}
                   className="brand-button-secondary w-full py-4 font-semibold"
                 >
-                  Share My Skin Result
+                  Share My Results
                 </button>
 
                 <button

@@ -49,8 +49,7 @@ export default function Home() {
                 Your Skin. Your Glow. Your K-Beauty.
               </h1>
               <p className="max-w-2xl text-base leading-7 text-[var(--muted)] md:text-lg">
-                Discover a more elevated way to understand your skin. One selfie, a few quick answers,
-                and a curated K-beauty routine designed around hydration, balance, and radiance.
+                Get your personalized K-beauty routine in 30 seconds — powered by AI.
               </p>
             </div>
 
@@ -85,7 +84,7 @@ export default function Home() {
                   onClick={() => router.push('/login')}
                   className="brand-button-secondary px-8 py-4 font-semibold"
                 >
-                  Save My History
+                  Sign in to Save Your History
                 </button>
               )}
 

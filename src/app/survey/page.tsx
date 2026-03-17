@@ -6,29 +6,29 @@ import { useRouter } from 'next/navigation'
 const questions = [
   {
     id: 'tightness',
-    question: '세안 후 피부가 당기나요?',
+    question: 'After cleansing, does your skin feel tight?',
     options: [
-      { value: 1, label: '전혀 안 당겨요' },
-      { value: 2, label: '조금 당겨요' },
-      { value: 3, label: '많이 당겨요' },
+      { value: 1, label: 'Not at all' },
+      { value: 2, label: 'A little' },
+      { value: 3, label: 'Very tight' },
     ]
   },
   {
     id: 'oiliness',
-    question: 'T존(이마, 코)이 번들거리나요?',
+    question: 'Does your T-zone get oily during the day?',
     options: [
-      { value: 1, label: '전혀 안 번들거려요' },
-      { value: 2, label: '조금 번들거려요' },
-      { value: 3, label: '많이 번들거려요' },
+      { value: 1, label: 'Never' },
+      { value: 2, label: 'Sometimes' },
+      { value: 3, label: 'Always' },
     ]
   },
   {
     id: 'trouble',
-    question: '트러블이 자주 생기나요?',
+    question: 'How often do you get breakouts?',
     options: [
-      { value: 1, label: '거의 없어요' },
-      { value: 2, label: '가끔 생겨요' },
-      { value: 3, label: '자주 생겨요' },
+      { value: 1, label: 'Rarely' },
+      { value: 2, label: 'Sometimes' },
+      { value: 3, label: 'Often' },
     ]
   },
 ]
@@ -57,7 +57,7 @@ export default function SurveyPage() {
               Skin quiz
             </div>
             <h1 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
-              Tell us how your skin feels
+              Tell us how your skin feels 💗
             </h1>
             <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
               These three answers help the camera analysis feel more human, more nuanced, and more aligned with your real skin behavior.
@@ -111,7 +111,7 @@ export default function SurveyPage() {
                   : 'cursor-not-allowed rounded-full bg-[rgba(255,179,209,0.45)] text-white/70'
               }`}
             >
-              Begin My Analysis
+                Start Skin Analysis
             </button>
           </section>
         </div>

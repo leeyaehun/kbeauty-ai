@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: '로그인이 필요해요' }, { status: 401 })
+      return NextResponse.json({ error: 'Please sign in to start Pro.' }, { status: 401 })
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url: session.url })
   } catch (error: any) {
-    console.error('Stripe 오류:', error)
+    console.error('Stripe error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

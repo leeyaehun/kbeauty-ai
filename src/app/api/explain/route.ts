@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const { product, analysisResult } = await req.json()
 
     if (!product || !analysisResult) {
-      return NextResponse.json({ error: '데이터가 없어요' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing product or analysis data.' }, { status: 400 })
     }
 
     const message = await anthropic.messages.create({
@@ -26,22 +26,22 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: 'user',
-          content: `피부 분석 결과와 제품 정보를 보고 추천 이유를 2문장으로 설명해줘. 한국어로 답해줘. 다른 텍스트 없이 설명만 써줘.
+          content: `Look at the skin analysis result and the product information, then explain the recommendation in exactly 2 sentences. Write in polished, friendly English for a global beauty audience. Return only the explanation.
 
-피부 분석:
-- 피부 타입: ${analysisResult.skin_type}
-- 수분도: ${analysisResult.scores.hydration}/100
-- 유분도: ${analysisResult.scores.oiliness}/100  
-- 민감도: ${analysisResult.scores.sensitivity}/100
-- 피부 고민: ${analysisResult.concerns.join(', ')}
+Skin analysis:
+- Skin type: ${analysisResult.skin_type}
+- Hydration: ${analysisResult.scores.hydration}/100
+- Oil level: ${analysisResult.scores.oiliness}/100
+- Sensitivity: ${analysisResult.scores.sensitivity}/100
+- Concerns: ${analysisResult.concerns.join(', ')}
 
-추천 제품:
-- 제품명: ${product.name}
-- 브랜드: ${product.brand}
-- 카테고리: ${product.category}
-- 피부 프로파일: ${JSON.stringify(product.skin_profile)}
+Recommended product:
+- Product name: ${product.name}
+- Brand: ${product.brand}
+- Category: ${product.category}
+- Skin profile: ${JSON.stringify(product.skin_profile)}
 
-이 제품이 왜 이 피부 타입에 맞는지 K-뷰티 성분 관점에서 2문장으로 설명해줘.`
+Explain why this product fits this skin type from a K-beauty ingredient perspective. You may mention hydration, sebum balance, centella, soothing care, barrier support, or texture benefits when relevant.`
         }
       ]
     })
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ explanation })
   } catch (error: any) {
-    console.error('설명 생성 오류:', error)
+    console.error('Explanation generation error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

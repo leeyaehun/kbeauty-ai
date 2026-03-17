@@ -39,7 +39,7 @@ function extractJsonString(rawText: string) {
   const trimmed = rawText.trim()
 
   if (!trimmed) {
-    throw new Error('AI 응답이 비어 있어요.')
+    throw new Error('The AI response was empty.')
   }
 
   const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
@@ -51,7 +51,7 @@ function extractJsonString(rawText: string) {
   const lastBrace = trimmed.lastIndexOf('}')
 
   if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-    throw new Error('AI 응답에서 JSON을 찾지 못했어요.')
+    throw new Error('We couldn’t find JSON in the AI response.')
   }
 
   return trimmed.slice(firstBrace, lastBrace + 1)
@@ -99,8 +99,8 @@ async function requestVisionAnalysis(openai: OpenAI, base64Data: string, surveyA
         messages: [
           {
             role: 'system',
-            content: `You are a professional dermatologist AI specializing in Korean skin types.
-Analyze the skin in the image and return ONLY a JSON object, no other text.
+            content: `You are a skincare analysis AI with strong K-beauty expertise.
+Analyze the face in the image and return ONLY a JSON object, with no extra text.
 JSON format:
 {
   "skin_type": "dry|oily|combination|sensitive|normal",
@@ -127,7 +127,7 @@ JSON format:
               },
               {
                 type: 'text',
-                text: `Analyze this skin image. Survey answers for reference: tightness=${surveyAnswers?.tightness ?? 'n/a'}/3, oiliness=${surveyAnswers?.oiliness ?? 'n/a'}/3, trouble=${surveyAnswers?.trouble ?? 'n/a'}/3. Return JSON only.`
+                text: `Analyze this skin image for a global beauty user. Survey answers for context: tightness=${surveyAnswers?.tightness ?? 'n/a'}/3, oiliness=${surveyAnswers?.oiliness ?? 'n/a'}/3, breakouts=${surveyAnswers?.trouble ?? 'n/a'}/3. Focus on hydration, sebum balance, sensitivity, pigmentation, and likely concerns. Return JSON only.`
               }
             ]
           }
@@ -139,7 +139,7 @@ JSON format:
 
       return response
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Vision API 호출에 실패했어요.'
+      const message = error instanceof Error ? error.message : 'The Vision API request failed.'
       lastError = new Error(message)
 
       if (attempt >= OPENAI_MAX_RETRIES) {
@@ -148,7 +148,7 @@ JSON format:
     }
   }
 
-  throw lastError ?? new Error('Vision API 호출에 실패했어요.')
+  throw lastError ?? new Error('The Vision API request failed.')
 }
 
 export async function POST(req: NextRequest) {
@@ -157,16 +157,15 @@ export async function POST(req: NextRequest) {
     const { imageBase64, surveyAnswers } = await req.json()
 
     if (!imageBase64) {
-      return NextResponse.json({ error: '이미지가 없어요' }, { status: 400 })
+      return NextResponse.json({ error: 'No image was provided.' }, { status: 400 })
     }
 
-    // base64에서 헤더 제거
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '')
     const imageBytes = estimateBase64Bytes(base64Data)
 
     if (imageBytes > MAX_IMAGE_BYTES) {
       return NextResponse.json(
-        { error: '촬영 이미지가 너무 커요. 다시 촬영하거나 조금 더 가까이에서 시도해주세요.' },
+        { error: 'Your selfie is too large. Please retake it or move a little closer.' },
         { status: 413 }
       )
     }
@@ -195,9 +194,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(analysisResult)
 
   } catch (error: any) {
-    console.error('분석 오류:', error)
+    console.error('Analysis error:', error)
     return NextResponse.json(
-      { error: error?.message || '분석 중 알 수 없는 오류가 발생했어요.' },
+      { error: error?.message || 'An unexpected error happened during analysis.' },
       { status: 500 }
     )
   }

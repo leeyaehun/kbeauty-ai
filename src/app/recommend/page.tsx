@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 const CATEGORY_KO: Record<string, string> = {
-  세럼: '세럼',
-  크림: '크림',
-  토너: '토너',
-  클렌저: '클렌저',
-  선케어: '선케어',
+  세럼: 'Serum',
+  크림: 'Cream',
+  토너: 'Toner',
+  클렌저: 'Cleanser',
+  선케어: 'Suncare',
 }
 
 type Product = {
@@ -57,7 +57,7 @@ export default function RecommendPage() {
         const data = await res.json()
 
         if (!res.ok) {
-          setError(data.error || '추천 실패')
+          setError(data.error || 'Recommendation request failed.')
           return
         }
 
@@ -79,7 +79,7 @@ export default function RecommendPage() {
 
         setProducts(productsWithExplanation)
       } catch {
-        setError('네트워크 오류가 발생했어요')
+        setError('A network error occurred while loading recommendations.')
       } finally {
         setLoading(false)
       }
@@ -94,7 +94,7 @@ export default function RecommendPage() {
         <div className="brand-card flex max-w-md items-center gap-4 px-6 py-5">
           <div className="h-10 w-10 rounded-full border-4 border-[#ffb3d1]/60 border-t-[#ff6b9d] animate-spin" />
           <div>
-            <p className="text-sm font-semibold text-[#d94d82]">Curating your routine</p>
+            <p className="text-sm font-semibold text-[#d94d82]">Curating your routine ✨</p>
             <p className="text-sm text-[var(--muted)]">Matching products to your skin profile.</p>
           </div>
         </div>
@@ -113,7 +113,7 @@ export default function RecommendPage() {
             onClick={() => router.push('/analyze')}
             className="brand-button-primary mt-8 px-8 py-4 font-semibold"
           >
-            Back to analysis
+            Back to Analysis
           </button>
         </div>
       </main>
@@ -183,7 +183,7 @@ export default function RecommendPage() {
                       {product.brand}
                     </span>
                     <span className="rounded-full bg-[#fff0f5] px-3 py-1 text-xs font-semibold text-[#c89b3c]">
-                      {product.category}
+                      {CATEGORY_KO[product.category] || product.category}
                     </span>
                   </div>
 
@@ -192,7 +192,7 @@ export default function RecommendPage() {
                   </h2>
 
                   <p className="mt-3 text-2xl font-semibold text-[#d94d82]">
-                    {product.price.toLocaleString()}원
+                    ${product.price.toLocaleString()}
                   </p>
 
                   {product.explanation && (
@@ -226,7 +226,7 @@ export default function RecommendPage() {
                     rel="noopener noreferrer"
                     className="brand-button-primary mt-6 block w-full px-5 py-3 text-center font-semibold"
                   >
-                    View at Olive Young
+                    Shop on Olive Young
                   </a>
                 </div>
               </div>
@@ -244,11 +244,11 @@ export default function RecommendPage() {
               const res = await fetch('/api/stripe/checkout', { method: 'POST' })
               const data = await res.json()
               if (data.url) window.location.href = data.url
-              else alert(data.error || '오류가 발생했어요')
+              else alert(data.error || 'Something went wrong.')
             }}
             className="brand-button-primary mt-5 w-full py-4 font-semibold"
           >
-            Start Pro for $9/month
+            Start Pro — $9/month
           </button>
         </div>
 

@@ -52,7 +52,7 @@ export default function LoginPage() {
               onClick={() => router.push('/analyze')}
               className="brand-button-ghost mt-4 px-6 py-3 text-sm font-semibold"
             >
-              Continue without login
+              Continue Without Signing In
             </button>
           </div>
         </div>

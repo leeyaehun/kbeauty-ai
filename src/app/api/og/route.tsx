@@ -4,11 +4,11 @@ import { ImageResponse } from 'next/og'
 export const runtime = 'edge'
 
 const SKIN_TYPE_KO: Record<string, string> = {
-  dry: '건성',
-  oily: '지성',
-  combination: '복합성',
-  sensitive: '민감성',
-  normal: '중성',
+  dry: 'Dry',
+  oily: 'Oily',
+  combination: 'Combination',
+  sensitive: 'Sensitive',
+  normal: 'Normal',
 }
 
 function clampScore(value: string | null, fallback: number) {
@@ -30,9 +30,9 @@ export async function GET(req: NextRequest) {
     const sensitivity = clampScore(searchParams.get('sensitivity'), 50)
 
     const metrics = [
-      { label: '수분도', value: hydration, color: '#60a5fa' },
-      { label: '유분도', value: oiliness, color: '#facc15' },
-      { label: '민감도', value: sensitivity, color: '#f87171' },
+      { label: 'Hydration', value: hydration, color: '#60a5fa' },
+      { label: 'Oil Level', value: oiliness, color: '#facc15' },
+      { label: 'Sensitivity', value: sensitivity, color: '#f87171' },
     ]
 
     return new ImageResponse(
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
               marginBottom: 16,
             }}
           >
-            K-Beauty AI 피부 분석 결과
+            K-Beauty AI Skin Analysis Results
           </div>
 
           <div
@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
               marginBottom: 40,
             }}
           >
-            {SKIN_TYPE_KO[skinType] || skinType} 피부
+            {SKIN_TYPE_KO[skinType] || skinType} Skin
           </div>
 
           <div

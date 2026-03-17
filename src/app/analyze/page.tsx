@@ -52,7 +52,7 @@ function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(blob => {
       if (!blob) {
-        reject(new Error('이미지 변환에 실패했어요. 다시 시도해주세요.'))
+        reject(new Error('We couldn’t process your photo. Please try again.'))
         return
       }
 
@@ -71,11 +71,11 @@ function blobToDataUrl(blob: Blob) {
         return
       }
 
-      reject(new Error('이미지 저장 형식 변환에 실패했어요.'))
+      reject(new Error('We couldn’t prepare your photo for upload.'))
     }
 
     reader.onerror = () => {
-      reject(new Error('이미지 저장 중 읽기 오류가 발생했어요.'))
+      reject(new Error('A photo read error occurred while saving your image.'))
     }
 
     reader.readAsDataURL(blob)
@@ -95,7 +95,7 @@ async function compressCanvasForUpload(sourceCanvas: HTMLCanvasElement) {
     const targetContext = targetCanvas.getContext('2d')
 
     if (!targetContext) {
-      throw new Error('이미지 압축 준비에 실패했어요.')
+      throw new Error('We couldn’t prepare your image for compression.')
     }
 
     targetContext.drawImage(sourceCanvas, 0, 0, targetCanvas.width, targetCanvas.height)
@@ -114,11 +114,11 @@ async function compressCanvasForUpload(sourceCanvas: HTMLCanvasElement) {
   }
 
   if (!smallestBlob) {
-    throw new Error('이미지 압축에 실패했어요.')
+    throw new Error('We couldn’t compress your image.')
   }
 
   if (smallestBlob.size > MAX_CAPTURE_BYTES) {
-    throw new Error('촬영 이미지가 너무 커서 저장할 수 없어요. 조금 더 가까이서 다시 촬영해주세요.')
+    throw new Error('Your selfie is still too large to upload. Move a little closer and try again.')
   }
 
   return blobToDataUrl(smallestBlob)
@@ -147,7 +147,7 @@ export default function AnalyzePage() {
           setStatus('ready')
         }
       } catch (e) {
-        console.error('카메라 접근 실패:', e)
+        console.error('Camera access failed:', e)
       }
     }
     startCamera()
@@ -213,7 +213,7 @@ export default function AnalyzePage() {
 
       const createFaceDetectorWithFallback = async (preferredDelegate: Delegate) => {
         if (preferredDelegate === 'GPU' && !canUseWebGL()) {
-          console.warn('WebGL 컨텍스트를 만들 수 없어 CPU delegate로 폴백합니다.')
+          console.warn('WebGL context unavailable, falling back to CPU delegate.')
           const detector = await createFaceDetector('CPU')
           return { detector, delegate: 'CPU' as const }
         }
@@ -226,7 +226,7 @@ export default function AnalyzePage() {
             throw error
           }
 
-          console.warn('GPU delegate 초기화 실패, CPU delegate로 폴백합니다.', error)
+          console.warn('GPU delegate initialization failed, falling back to CPU delegate.', error)
           const detector = await createFaceDetector('CPU')
           return { detector, delegate: 'CPU' as const }
         }
@@ -258,7 +258,7 @@ export default function AnalyzePage() {
 
         isRecovering = true
         const fallbackDelegate: Delegate = activeDelegate === 'GPU' ? 'CPU' : 'CPU'
-        console.warn(`FaceDetector 추론 실패, ${fallbackDelegate} delegate로 다시 초기화합니다.`, error)
+        console.warn(`FaceDetector inference failed, reinitializing with ${fallbackDelegate} delegate.`, error)
 
         try {
           const initialized = await initializeDetector(fallbackDelegate)
@@ -266,7 +266,7 @@ export default function AnalyzePage() {
             scheduleDetect()
           }
         } catch (recoveryError) {
-          console.error('FaceDetector 재초기화 실패:', recoveryError)
+          console.error('FaceDetector reinitialization failed:', recoveryError)
         } finally {
           isRecovering = false
         }
@@ -310,7 +310,7 @@ export default function AnalyzePage() {
     }
 
     loadFaceDetector().catch(error => {
-      console.error('FaceDetector 초기화 실패:', error)
+      console.error('FaceDetector initialization failed:', error)
     })
 
     return () => {
@@ -337,7 +337,7 @@ export default function AnalyzePage() {
       const ctx = canvas.getContext('2d')
 
       if (!ctx) {
-        throw new Error('카메라 프레임을 읽지 못했어요. 다시 시도해주세요.')
+        throw new Error('We couldn’t read the camera frame. Please try again.')
       }
 
       ctx.drawImage(video, 0, 0)
@@ -348,14 +348,14 @@ export default function AnalyzePage() {
       const storedImage = sessionStorage.getItem('capturedImage')
 
       if (!storedImage) {
-        throw new Error('촬영 이미지를 저장하지 못했어요. 브라우저 저장 공간을 확인해주세요.')
+        throw new Error('Your selfie wasn’t saved. Please check your browser storage and try again.')
       }
 
       setStatus('captured')
       router.push('/survey')
     } catch (error) {
-      console.error('촬영 저장 실패:', error)
-      setCaptureError(error instanceof Error ? error.message : '촬영 이미지를 저장하지 못했어요.')
+      console.error('Selfie save failed:', error)
+      setCaptureError(error instanceof Error ? error.message : 'We couldn’t save your selfie.')
     } finally {
       setIsCapturing(false)
     }
@@ -374,7 +374,7 @@ export default function AnalyzePage() {
               Live camera scan
             </div>
             <h1 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
-              Frame your face in soft light
+              Frame your face in soft light ✨
             </h1>
             <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
               Keep your face centered, face forward, and let the camera capture your natural skin texture for a more refined K-beauty analysis.
@@ -415,18 +415,18 @@ export default function AnalyzePage() {
                 {status === 'detected' ? 'Face confirmed' : status === 'loading' ? 'Preparing camera' : 'Positioning guidance'}
               </p>
               {status === 'loading' && (
-                <p className="mt-3 text-base text-[var(--muted)]">카메라를 준비하고 있어요.</p>
+                <p className="mt-3 text-base text-[var(--muted)]">Getting your camera ready.</p>
               )}
               {status === 'ready' && (
                 <div className="mt-3 space-y-2">
-                  <p className="text-lg font-semibold text-[var(--ink)]">얼굴을 프레임 중앙에 맞춰주세요</p>
-                  <p className="text-sm text-[var(--muted)]">밝은 곳에서 정면을 바라보면 더 정확해져요.</p>
+                  <p className="text-lg font-semibold text-[var(--ink)]">Center your face inside the frame.</p>
+                  <p className="text-sm text-[var(--muted)]">Face forward in bright light for the most accurate read.</p>
                 </div>
               )}
               {status === 'detected' && (
                 <div className="mt-3 space-y-2">
-                  <p className="text-lg font-semibold text-[#d94d82]">완벽해요. 피부를 읽을 준비가 됐어요.</p>
-                  <p className="text-sm text-[var(--muted)]">Capture를 눌러 다음 단계로 이동하세요.</p>
+                  <p className="text-lg font-semibold text-[#d94d82]">Perfect. Your skin is ready to be analyzed.</p>
+                  <p className="text-sm text-[var(--muted)]">Tap capture to move into your quick skin quiz.</p>
                 </div>
               )}
             </div>

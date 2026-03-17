@@ -14,7 +14,7 @@ function getOpenAIClient() {
 }
 
 function buildUserProfileText(analysisResult: any) {
-  return `피부타입: ${analysisResult.skin_type} | 수분도: ${analysisResult.scores.hydration} | 유분도: ${analysisResult.scores.oiliness} | 민감도: ${analysisResult.scores.sensitivity} | 고민: ${analysisResult.concerns.join(', ')}`
+  return `Skin type: ${analysisResult.skin_type} | Hydration: ${analysisResult.scores.hydration} | Oil level: ${analysisResult.scores.oiliness} | Sensitivity: ${analysisResult.scores.sensitivity} | Concerns: ${analysisResult.concerns.join(', ')}`
 }
 
 export async function POST(req: NextRequest) {
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const { analysisResult, category } = await req.json()
 
     if (!analysisResult) {
-      return NextResponse.json({ error: '분석 결과가 없어요' }, { status: 400 })
+      return NextResponse.json({ error: 'Analysis result is missing.' }, { status: 400 })
     }
 
     const profileText = buildUserProfileText(analysisResult)
@@ -42,13 +42,13 @@ export async function POST(req: NextRequest) {
     })
 
     if (error) {
-      console.error('제품 검색 실패:', error)
-      return NextResponse.json({ error: '제품 검색 실패' }, { status: 500 })
+      console.error('Product lookup failed:', error)
+      return NextResponse.json({ error: 'We couldn’t load product recommendations.' }, { status: 500 })
     }
 
     return NextResponse.json({ products })
   } catch (error: any) {
-    console.error('추천 오류:', error)
+    console.error('Recommendation error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
