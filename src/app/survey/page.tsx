@@ -62,17 +62,6 @@ export default function SurveyPage() {
             <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
               These three answers help the camera analysis feel more human, more nuanced, and more aligned with your real skin behavior.
             </p>
-
-            <div className="mt-8 space-y-4">
-              {questions.map((question, index) => (
-                <div key={question.id} className="brand-card-soft p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c89b3c]">
-                    Step {index + 1}
-                  </p>
-                  <p className="mt-2 font-semibold text-[var(--ink)]">{question.question}</p>
-                </div>
-              ))}
-            </div>
           </aside>
 
           <section className="space-y-5">
