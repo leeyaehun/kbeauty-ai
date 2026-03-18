@@ -5,13 +5,18 @@ import { useRouter } from 'next/navigation'
 
 import UpgradeModal from '@/components/UpgradeModal'
 
+type ColorSwatch = {
+  name: string
+  hex: string
+}
+
 type PersonalColorResult = {
   season: 'spring_warm' | 'summer_cool' | 'autumn_warm' | 'winter_cool'
   tone: 'warm' | 'cool'
   description: string
   characteristics: string[]
-  best_colors: string[]
-  avoid_colors: string[]
+  best_colors: ColorSwatch[]
+  avoid_colors: ColorSwatch[]
   makeup_recommendations: {
     foundation: string
     lip: string
@@ -26,36 +31,6 @@ const SEASON_LABELS: Record<PersonalColorResult['season'], { emoji: string, titl
   summer_cool: { emoji: '🫧', title: 'Summer Cool' },
   autumn_warm: { emoji: '🍂', title: 'Autumn Warm' },
   winter_cool: { emoji: '❄️', title: 'Winter Cool' },
-}
-
-function stringToColor(label: string) {
-  const presets: Record<string, string> = {
-    coral: '#ff7f6e',
-    peach: '#ffb38a',
-    apricot: '#f7a85d',
-    'warm red': '#d9485f',
-    'golden yellow': '#f5c451',
-    olive: '#7c8b4b',
-    'cool gray': '#94a3b8',
-    'icy blue': '#c7e7ff',
-    'warm brown': '#8b5e3c',
-    gold: '#d4af37',
-    beige: '#d6b28a',
-    plum: '#7b4a8b',
-  }
-
-  const normalized = label.toLowerCase().trim()
-
-  if (presets[normalized]) {
-    return presets[normalized]
-  }
-
-  let hash = 0
-  for (let index = 0; index < normalized.length; index += 1) {
-    hash = normalized.charCodeAt(index) + ((hash << 5) - hash)
-  }
-
-  return `hsl(${Math.abs(hash) % 360} 72% 68%)`
 }
 
 export default function PersonalColorPage() {
@@ -222,14 +197,14 @@ export default function PersonalColorPage() {
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 {result.best_colors.map((color) => (
                   <div
-                    key={color}
+                    key={`${color.name}-${color.hex}`}
                     className="rounded-[24px] border border-[rgba(255,107,157,0.12)] bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(255,240,245,0.92))] p-4 shadow-[0_14px_24px_rgba(149,64,109,0.08)]"
                   >
                     <div
                       className="h-14 w-14 rounded-full shadow-[inset_0_2px_6px_rgba(255,255,255,0.35)]"
-                      style={{ backgroundColor: stringToColor(color) }}
+                      style={{ backgroundColor: color.hex }}
                     />
-                    <p className="mt-3 text-sm font-semibold text-[var(--ink)]">{color}</p>
+                    <p className="mt-3 text-sm font-semibold text-[var(--ink)]">{color.name}</p>
                   </div>
                 ))}
               </div>
@@ -240,14 +215,14 @@ export default function PersonalColorPage() {
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 {result.avoid_colors.map((color) => (
                   <div
-                    key={color}
+                    key={`${color.name}-${color.hex}`}
                     className="rounded-[24px] border border-[rgba(148,163,184,0.18)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(241,245,249,0.96))] p-4 shadow-[0_14px_24px_rgba(100,116,139,0.08)]"
                   >
                     <div
                       className="h-14 w-14 rounded-full shadow-[inset_0_2px_6px_rgba(255,255,255,0.35)]"
-                      style={{ backgroundColor: stringToColor(color) }}
+                      style={{ backgroundColor: color.hex }}
                     />
-                    <p className="mt-3 text-sm font-semibold text-[var(--ink)]">{color}</p>
+                    <p className="mt-3 text-sm font-semibold text-[var(--ink)]">{color.name}</p>
                   </div>
                 ))}
               </div>

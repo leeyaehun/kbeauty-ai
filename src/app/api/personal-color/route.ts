@@ -8,8 +8,8 @@ type PersonalColorResult = {
   tone: 'warm' | 'cool'
   description: string
   characteristics: string[]
-  best_colors: string[]
-  avoid_colors: string[]
+  best_colors: Array<{ name: string, hex: string }>
+  avoid_colors: Array<{ name: string, hex: string }>
   makeup_recommendations: {
     foundation: string
     lip: string
@@ -50,6 +50,34 @@ function normalizeStringList(value: unknown, limit = 6) {
     : []
 }
 
+function normalizeHex(value: unknown) {
+  const hex = typeof value === 'string' ? value.trim() : ''
+  return /^#(?:[0-9a-fA-F]{6})$/.test(hex) ? hex.toUpperCase() : '#F4B3C2'
+}
+
+function normalizeColorList(
+  value: unknown,
+  fallback: Array<{ name: string, hex: string }>
+) {
+  if (!Array.isArray(value)) {
+    return fallback
+  }
+
+  const colors = value
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => {
+      const entry = item as Record<string, unknown>
+
+      return {
+        name: typeof entry.name === 'string' ? entry.name : 'Color',
+        hex: normalizeHex(entry.hex),
+      }
+    })
+    .slice(0, 6)
+
+  return colors.length > 0 ? colors : fallback
+}
+
 function normalizeSeason(value: unknown): PersonalColorResult['season'] {
   const normalized = typeof value === 'string' ? value.toLowerCase().trim() : ''
 
@@ -82,8 +110,15 @@ function normalizePersonalColorResult(parsed: any): PersonalColorResult {
       ? parsed.description
       : 'Your coloring appears balanced with a naturally harmonious palette.',
     characteristics: normalizeStringList(parsed?.characteristics),
-    best_colors: normalizeStringList(parsed?.best_colors),
-    avoid_colors: normalizeStringList(parsed?.avoid_colors),
+    best_colors: normalizeColorList(parsed?.best_colors, [
+      { name: 'Coral', hex: '#FF6B6B' },
+      { name: 'Peach', hex: '#FFAB76' },
+      { name: 'Golden Yellow', hex: '#FFD700' },
+    ]),
+    avoid_colors: normalizeColorList(parsed?.avoid_colors, [
+      { name: 'Icy Blue', hex: '#A8D8EA' },
+      { name: 'Cool Gray', hex: '#B0B0B0' },
+    ]),
     makeup_recommendations: {
       foundation: typeof parsed?.makeup_recommendations?.foundation === 'string'
         ? parsed.makeup_recommendations.foundation
@@ -155,8 +190,15 @@ export async function POST(req: NextRequest) {
   "tone": "warm | cool",
   "description": "short paragraph",
   "characteristics": ["item"],
-  "best_colors": ["item"],
-  "avoid_colors": ["item"],
+  "best_colors": [
+    { "name": "Coral", "hex": "#FF6B6B" },
+    { "name": "Peach", "hex": "#FFAB76" },
+    { "name": "Golden Yellow", "hex": "#FFD700" }
+  ],
+  "avoid_colors": [
+    { "name": "Icy Blue", "hex": "#A8D8EA" },
+    { "name": "Cool Gray", "hex": "#B0B0B0" }
+  ],
   "makeup_recommendations": {
     "foundation": "text",
     "lip": "text",
