@@ -62,6 +62,7 @@ const rowsPerPage = Math.max(
   24,
   Number.parseInt(process.env.GLOBAL_OLIVEYOUNG_ROWS_PER_PAGE ?? '48', 10)
 )
+const skipEmbed = process.env.GLOBAL_OLIVEYOUNG_SKIP_EMBED === '1'
 const categoryFilter = new Set(
   (process.env.GLOBAL_OLIVEYOUNG_CATEGORY_FILTER ?? '')
     .split(',')
@@ -236,6 +237,34 @@ async function fetchProductListPage(page: Page, query: string, pageNo: number) {
   return candidates
 }
 
+async function gotoSearchPage(page: Page, query: string) {
+  const bootstrapQueries = [query, 'serum']
+  let lastError: unknown = null
+
+  for (const bootstrapQuery of bootstrapQueries) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await page.goto(buildSearchUrl(bootstrapQuery, 1), {
+          waitUntil: 'domcontentloaded',
+          timeout: 45000,
+        })
+        await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+        await page.waitForTimeout(1200)
+
+        if (page.url().includes('/display/search')) {
+          return
+        }
+      } catch (error) {
+        lastError = error
+      }
+
+      await sleep(1500 * attempt)
+    }
+  }
+
+  throw new Error(`검색 페이지 진입 실패: query="${query}" ${String(lastError ?? '')}`.trim())
+}
+
 async function processCategory(
   page: Page,
   refs: Awaited<ReturnType<typeof loadExistingProducts>>,
@@ -247,11 +276,7 @@ async function processCategory(
   const categoryCandidates = new Map<string, ProductCandidate>()
 
   for (const query of category.queries) {
-    await page.goto(buildSearchUrl(query, 1), {
-      waitUntil: 'domcontentloaded',
-      timeout: 45000,
-    })
-    await page.waitForSelector('#query', { state: 'attached', timeout: 15000 })
+    await gotoSearchPage(page, query)
 
     for (let pageNo = 1; pageNo <= resultPageLimit; pageNo++) {
       const beforeCount = categoryCandidates.size
@@ -362,8 +387,12 @@ async function main() {
 
   printReport()
 
-  console.log('\n글로벌 크롤링 후 임베딩 생성 시작...')
-  await embedMissingProducts()
+  if (skipEmbed) {
+    console.log('\nGLOBAL_OLIVEYOUNG_SKIP_EMBED=1 이므로 임베딩은 건너뜁니다.')
+  } else {
+    console.log('\n글로벌 크롤링 후 임베딩 생성 시작...')
+    await embedMissingProducts()
+  }
 }
 
 const __filename = fileURLToPath(import.meta.url)

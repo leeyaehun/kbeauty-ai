@@ -16,6 +16,7 @@ import {
 } from './oliveyoung-shared'
 
 const CATEGORY_LIST_SELECTOR = '#Contents ul.cate_prd_list > li'
+const DOMESTIC_HOME_URL = 'https://www.oliveyoung.co.kr/store/main/main.do'
 
 const DOMESTIC_CATEGORIES = [
   '세럼',
@@ -84,6 +85,11 @@ const pageSize = Math.max(
   24,
   Number.parseInt(process.env.OLIVEYOUNG_FULL_PAGE_SIZE ?? '48', 10)
 )
+const listPageRetryCount = Math.max(
+  1,
+  Number.parseInt(process.env.OLIVEYOUNG_FULL_PAGE_RETRY_COUNT ?? '3', 10)
+)
+const skipEmbed = process.env.OLIVEYOUNG_FULL_SKIP_EMBED === '1'
 const sourceFilter = new Set(
   (process.env.OLIVEYOUNG_FULL_SOURCE_FILTER ?? '')
     .split(',')
@@ -221,7 +227,7 @@ const DOMESTIC_SOURCES: SourceSpec[] = [
   {
     key: 'shampoo',
     label: '샴푸/린스',
-    url: 'https://www.oliveyoung.co.kr/store/display/getMCategoryList.do?dispCatNo=100000100040005',
+    url: 'https://www.oliveyoung.co.kr/store/display/getMCategoryList.do?dispCatNo=100000100040008',
     classify: directCategory('샴푸'),
   },
   {
@@ -270,9 +276,101 @@ function bumpReport(category: DomesticCategory, action: 'inserted' | 'updated') 
   stats[action] += 1
 }
 
+function shouldSkipExistingDomesticProduct(
+  refs: Awaited<ReturnType<typeof loadExistingProducts>>,
+  affiliateUrl: string,
+  category: DomesticCategory
+) {
+  const existing = refs.byAffiliateUrl.get(affiliateUrl)
+  return existing?.category === category
+}
+
 async function waitForCategoryPage(page: Page) {
-  await page.waitForSelector(CATEGORY_LIST_SELECTOR, { timeout: 20000 })
-  await page.waitForTimeout(1200)
+  let lastError: unknown = null
+
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      await page.waitForSelector(CATEGORY_LIST_SELECTOR, { timeout: 15000 })
+      await page.waitForTimeout(1200)
+      return
+    } catch (error) {
+      lastError = error
+
+      const pageState = await page
+        .evaluate(() => ({
+          bodyText: document.body?.innerText ?? '',
+          title: document.title ?? '',
+          url: window.location.href,
+        }))
+        .catch(() => ({
+          bodyText: '',
+          title: '',
+          url: page.url(),
+        }))
+
+      const waitingForChallenge =
+        pageState.title.includes('잠시만 기다려') ||
+        pageState.bodyText.includes('Enable JavaScript and cookies to continue') ||
+        pageState.bodyText.includes('잠시만 기다려 주세요')
+
+      if (!waitingForChallenge) {
+        throw error
+      }
+
+      console.warn(
+        `[국내 목록] Cloudflare 대기 페이지 감지, ${attempt}/4 재시도: ${pageState.url}`
+      )
+      await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+      await page.waitForTimeout(10000 * attempt)
+    }
+  }
+
+  throw lastError
+}
+
+async function primeDomesticSession(page: Page) {
+  await page.goto(DOMESTIC_HOME_URL, { waitUntil: 'domcontentloaded', timeout: 45000 })
+
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const pageState = await page
+      .evaluate(() => ({
+        bodyText: document.body?.innerText ?? '',
+        title: document.title ?? '',
+      }))
+      .catch(() => ({
+        bodyText: '',
+        title: '',
+      }))
+
+    const waitingForChallenge =
+      pageState.title.includes('잠시만 기다려') ||
+      pageState.bodyText.includes('Enable JavaScript and cookies to continue') ||
+      pageState.bodyText.includes('잠시만 기다려 주세요')
+
+    if (!waitingForChallenge) {
+      return
+    }
+
+    console.warn(`[국내 세션] 메인 페이지 Cloudflare 대기 감지, ${attempt}/4 대기`)
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+    await page.waitForTimeout(8000 * attempt)
+  }
+}
+
+async function readDomesticPageState(page: Page) {
+  return page
+    .evaluate(() => ({
+      bodyText: document.body?.innerText ?? '',
+      hasList: Boolean(document.querySelector('#Contents ul.cate_prd_list > li')),
+      title: document.title ?? '',
+      url: window.location.href,
+    }))
+    .catch(() => ({
+      bodyText: '',
+      hasList: false,
+      title: '',
+      url: page.url(),
+    }))
 }
 
 async function scrapeCategoryPage(page: Page) {
@@ -310,19 +408,52 @@ async function collectSourceCandidates(
   sessionUrls: Set<string>,
   source: SourceSpec
 ) {
-  const page = await context.newPage()
+  let page = await context.newPage()
   const candidates: Candidate[] = []
   const localUrls = new Set<string>()
   const seenPageKeys = new Set<string>()
 
   try {
+    await primeDomesticSession(page)
+
     for (let pageNo = 1; listPageLimit === 0 || pageNo <= listPageLimit; pageNo++) {
       const pageUrl = buildCategoryPageUrl(source.url, pageNo)
+      let rawItems: Awaited<ReturnType<typeof scrapeCategoryPage>> | null = null
 
-      await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 45000 })
-      await waitForCategoryPage(page)
+      for (let attempt = 1; attempt <= listPageRetryCount; attempt++) {
+        try {
+          await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 45000 })
+          await waitForCategoryPage(page)
+          rawItems = await scrapeCategoryPage(page)
+          break
+        } catch (error) {
+          const pageState = await readDomesticPageState(page)
+          const waitingForChallenge =
+            pageState.title.includes('잠시만 기다려') ||
+            pageState.bodyText.includes('Enable JavaScript and cookies to continue') ||
+            pageState.bodyText.includes('잠시만 기다려 주세요')
 
-      const rawItems = await scrapeCategoryPage(page)
+          if (!waitingForChallenge && !pageState.hasList) {
+            rawItems = []
+            break
+          }
+
+          if (attempt === listPageRetryCount) {
+            throw error
+          }
+
+          console.warn(
+            `[${source.label}] ${pageNo}페이지 진입 실패, ${attempt}/${listPageRetryCount} 재시도`
+          )
+          await page.close().catch(() => {})
+          page = await context.newPage()
+          await primeDomesticSession(page)
+        }
+      }
+
+      if (!rawItems) {
+        break
+      }
 
       if (rawItems.length === 0) {
         break
@@ -354,7 +485,7 @@ async function collectSourceCandidates(
         }
 
         if (
-          refs.byAffiliateUrl.has(normalizedUrl) ||
+          shouldSkipExistingDomesticProduct(refs, normalizedUrl, category) ||
           sessionUrls.has(normalizedUrl) ||
           localUrls.has(normalizedUrl)
         ) {
@@ -477,7 +608,10 @@ async function processSource(
         const detail = details[batchIndex]
         const normalizedUrl = normalizeDomesticProductUrl(detail.affiliateUrl || candidate.affiliateUrl)
 
-        if (sessionUrls.has(normalizedUrl) || refs.byAffiliateUrl.has(normalizedUrl)) {
+        if (
+          sessionUrls.has(normalizedUrl) ||
+          shouldSkipExistingDomesticProduct(refs, normalizedUrl, candidate.category)
+        ) {
           continue
         }
 
@@ -545,31 +679,35 @@ async function main() {
 
   console.log(`기존 affiliate_url ${refs.byAffiliateUrl.size}개, global_affiliate_url ${refs.byGlobalUrl.size}개 확인`)
 
-  const browser = await chromium.launch({ headless: true })
-  const context = await browser.newContext({
-    locale: 'ko-KR',
-    userAgent: USER_AGENT,
-    viewport: { width: 1440, height: 2200 },
-  })
+  for (const source of activeSources) {
+    const browser = await chromium.launch({ headless: true })
+    const context = await browser.newContext({
+      locale: 'ko-KR',
+      userAgent: USER_AGENT,
+      viewport: { width: 1440, height: 2200 },
+    })
 
-  await context.setExtraHTTPHeaders({
-    'accept-language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-  })
+    await context.setExtraHTTPHeaders({
+      'accept-language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+    })
 
-  try {
-    for (const source of activeSources) {
+    try {
       await processSource(context, refs, sessionUrls, source)
+    } finally {
+      await context.close()
+      await browser.close()
     }
-  } finally {
-    await context.close()
-    await browser.close()
   }
 
   printCurrentReport()
   await printFinalCounts()
 
-  console.log('\n국내 크롤링 후 임베딩 생성 시작...')
-  await embedMissingProducts()
+  if (skipEmbed) {
+    console.log('\nOLIVEYOUNG_FULL_SKIP_EMBED=1 이므로 임베딩은 건너뜁니다.')
+  } else {
+    console.log('\n국내 크롤링 후 임베딩 생성 시작...')
+    await embedMissingProducts()
+  }
 }
 
 const __filename = fileURLToPath(import.meta.url)

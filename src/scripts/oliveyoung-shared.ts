@@ -64,6 +64,50 @@ export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function isRetryableSupabaseError(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const message = 'message' in error ? String(error.message ?? '') : ''
+  const details = 'details' in error ? String(error.details ?? '') : ''
+  const combined = `${message} ${details}`.toLowerCase()
+
+  return (
+    combined.includes('502') ||
+    combined.includes('503') ||
+    combined.includes('504') ||
+    combined.includes('bad gateway') ||
+    combined.includes('gateway timeout') ||
+    combined.includes('temporarily unavailable') ||
+    combined.includes('fetch failed') ||
+    combined.includes('network') ||
+    combined.includes('cloudflare')
+  )
+}
+
+async function withSupabaseRetry<T>(label: string, operation: () => Promise<T>) {
+  let lastError: unknown = null
+
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      return await operation()
+    } catch (error) {
+      lastError = error
+
+      if (!isRetryableSupabaseError(error) || attempt === 5) {
+        throw error
+      }
+
+      const waitMs = attempt * 2000
+      console.warn(`${label} 재시도 ${attempt}/5: ${String(error)}`)
+      await sleep(waitMs)
+    }
+  }
+
+  throw lastError
+}
+
 export function normalizeWhitespace(value: string) {
   return value.replace(/\s+/g, ' ').trim()
 }
@@ -236,7 +280,9 @@ function buildUpdatePayload(
 }
 
 async function writeProductUpdate(id: string, updatePayload: Record<string, unknown>) {
-  const fullUpdate = await supabase.from('products').update(updatePayload).eq('id', id)
+  const fullUpdate = await withSupabaseRetry(`update:${id}`, () =>
+    supabase.from('products').update(updatePayload).eq('id', id)
+  )
 
   if (!fullUpdate.error) {
     return
@@ -249,7 +295,9 @@ async function writeProductUpdate(id: string, updatePayload: Record<string, unkn
   const fallbackPayload = Object.fromEntries(
     Object.entries(updatePayload).filter(([key]) => key !== 'global_affiliate_url')
   )
-  const fallbackUpdate = await supabase.from('products').update(fallbackPayload).eq('id', id)
+  const fallbackUpdate = await withSupabaseRetry(`update-fallback:${id}`, () =>
+    supabase.from('products').update(fallbackPayload).eq('id', id)
+  )
 
   if (fallbackUpdate.error) {
     throw new Error(`Failed to update ${id}: ${fallbackUpdate.error.message}`)
@@ -257,20 +305,24 @@ async function writeProductUpdate(id: string, updatePayload: Record<string, unkn
 }
 
 async function fetchInsertedProduct(payload: ProductPayload) {
-  const fullAffiliateQuery = await supabase
-    .from('products')
-    .select('id, affiliate_url, global_affiliate_url, name, brand, category, image_url, ingredient_names, price')
-    .eq('affiliate_url', payload.affiliate_url)
-    .maybeSingle()
+  const fullAffiliateQuery = await withSupabaseRetry(`fetch-affiliate:${payload.affiliate_url}`, () =>
+    supabase
+      .from('products')
+      .select('id, affiliate_url, global_affiliate_url, name, brand, category, image_url, ingredient_names, price')
+      .eq('affiliate_url', payload.affiliate_url)
+      .maybeSingle()
+  )
 
   let byAffiliateUrl = fullAffiliateQuery
 
   if (fullAffiliateQuery.error && isMissingGlobalAffiliateUrlColumn(fullAffiliateQuery.error)) {
-    byAffiliateUrl = await supabase
-      .from('products')
-      .select('id, affiliate_url, name, brand, category, image_url, ingredient_names, price')
-      .eq('affiliate_url', payload.affiliate_url)
-      .maybeSingle()
+    byAffiliateUrl = await withSupabaseRetry(`fetch-affiliate-fallback:${payload.affiliate_url}`, () =>
+      supabase
+        .from('products')
+        .select('id, affiliate_url, name, brand, category, image_url, ingredient_names, price')
+        .eq('affiliate_url', payload.affiliate_url)
+        .maybeSingle()
+    )
   }
 
   if (!byAffiliateUrl.error && byAffiliateUrl.data) {
@@ -282,20 +334,24 @@ async function fetchInsertedProduct(payload: ProductPayload) {
     })
   }
 
-  const fullNameQuery = await supabase
-    .from('products')
-    .select('id, affiliate_url, global_affiliate_url, name, brand, category, image_url, ingredient_names, price')
-    .eq('name', payload.name)
-    .maybeSingle()
+  const fullNameQuery = await withSupabaseRetry(`fetch-name:${payload.name}`, () =>
+    supabase
+      .from('products')
+      .select('id, affiliate_url, global_affiliate_url, name, brand, category, image_url, ingredient_names, price')
+      .eq('name', payload.name)
+      .maybeSingle()
+  )
 
   let byName = fullNameQuery
 
   if (fullNameQuery.error && isMissingGlobalAffiliateUrlColumn(fullNameQuery.error)) {
-    byName = await supabase
-      .from('products')
-      .select('id, affiliate_url, name, brand, category, image_url, ingredient_names, price')
-      .eq('name', payload.name)
-      .maybeSingle()
+    byName = await withSupabaseRetry(`fetch-name-fallback:${payload.name}`, () =>
+      supabase
+        .from('products')
+        .select('id, affiliate_url, name, brand, category, image_url, ingredient_names, price')
+        .eq('name', payload.name)
+        .maybeSingle()
+    )
   }
 
   if (byName.error || !byName.data) {
@@ -309,11 +365,13 @@ async function fetchInsertedProduct(payload: ProductPayload) {
 }
 
 async function writeProductInsert(payload: ProductPayload) {
-  const fullInsert = await supabase
-    .from('products')
-    .insert(payload)
-    .select('id, affiliate_url, global_affiliate_url, name, brand, category, image_url, ingredient_names, price')
-    .maybeSingle()
+  const fullInsert = await withSupabaseRetry(`insert:${payload.name}`, () =>
+    supabase
+      .from('products')
+      .insert(payload)
+      .select('id, affiliate_url, global_affiliate_url, name, brand, category, image_url, ingredient_names, price')
+      .maybeSingle()
+  )
 
   if (!fullInsert.error && fullInsert.data) {
     return toExistingProductRecord(fullInsert.data)
@@ -326,11 +384,13 @@ async function writeProductInsert(payload: ProductPayload) {
   const fallbackPayload = Object.fromEntries(
     Object.entries(payload).filter(([key]) => key !== 'global_affiliate_url')
   ) as Omit<ProductPayload, 'global_affiliate_url'>
-  const fallbackInsert = await supabase
-    .from('products')
-    .insert(fallbackPayload)
-    .select('id, affiliate_url, name, brand, category, image_url, ingredient_names, price')
-    .maybeSingle()
+  const fallbackInsert = await withSupabaseRetry(`insert-fallback:${payload.name}`, () =>
+    supabase
+      .from('products')
+      .insert(fallbackPayload)
+      .select('id, affiliate_url, name, brand, category, image_url, ingredient_names, price')
+      .maybeSingle()
+  )
 
   if (fallbackInsert.error) {
     throw fallbackInsert.error
