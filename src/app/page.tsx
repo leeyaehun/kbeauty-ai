@@ -89,6 +89,15 @@ export default function Home() {
               )}
 
               {user && (
+                <a
+                  href="/history"
+                  className="brand-button-secondary px-8 py-4 text-center font-semibold"
+                >
+                  My Skin History
+                </a>
+              )}
+
+              {user && (
                 <button
                   onClick={async () => {
                     const supabase = createClient()

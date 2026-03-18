@@ -123,6 +123,7 @@ export default function ResultsPage() {
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [isSignedIn, setIsSignedIn] = useState(false)
 
   useEffect(() => {
     async function analyze() {
@@ -142,9 +143,11 @@ export default function ResultsPage() {
         sessionStorage.setItem('analysisResult', JSON.stringify(data))
 
         try {
-        const { createClient } = await import('@/lib/supabase')
-        const supabase = createClient()
-        const { data: { user } } = await supabase.auth.getUser()
+          const { createClient } = await import('@/lib/supabase')
+          const supabase = createClient()
+          const { data: { user } } = await supabase.auth.getUser()
+
+          setIsSignedIn(Boolean(user))
 
           if (user) {
             await supabase.from('analyses').insert({
@@ -302,6 +305,22 @@ export default function ResultsPage() {
                 >
                   Personalized Product Recommendations
                 </button>
+
+                {isSignedIn ? (
+                  <button
+                    onClick={() => router.push('/history')}
+                    className="brand-button-secondary w-full py-4 font-semibold"
+                  >
+                    View My Skin History
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => router.push('/login')}
+                    className="brand-button-secondary w-full py-4 font-semibold"
+                  >
+                    Sign in to track your progress
+                  </button>
+                )}
 
                 <button
                   onClick={() => {
