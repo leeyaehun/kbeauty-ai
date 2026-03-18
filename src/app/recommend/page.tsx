@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
+
 const CATEGORY_KO: Record<string, string> = {
   세럼: 'Serum',
   크림: 'Cream',
@@ -27,7 +29,7 @@ type Product = {
   display_link_region?: Region
 }
 
-type Region = 'korea' | 'global'
+type Region = ShoppingRegion
 
 function ProductImage({ imageUrl, productName }: { imageUrl: string | null, productName: string }) {
   const [imageFailed, setImageFailed] = useState(false)
@@ -57,44 +59,27 @@ export default function RecommendPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [region, setRegion] = useState<Region>('global')
-  const [locationReady, setLocationReady] = useState(false)
+  const [regionReady, setRegionReady] = useState(false)
 
   const categories = ['세럼', '크림', '토너', '클렌저', '선케어']
 
   useEffect(() => {
-    let isActive = true
+    const storedRegion = window.localStorage.getItem(REGION_STORAGE_KEY)
 
-    async function detectRegion() {
-      try {
-        const res = await fetch('/api/location', { cache: 'no-store' })
-        const data = await res.json()
-
-        if (isActive) {
-          setRegion(data.region === 'korea' ? 'korea' : 'global')
-        }
-      } catch {
-        if (isActive) {
-          setRegion('global')
-        }
-      } finally {
-        if (isActive) {
-          setLocationReady(true)
-        }
-      }
+    if (isShoppingRegion(storedRegion)) {
+      setRegion(storedRegion)
+    } else {
+      setRegion('global')
     }
 
-    detectRegion()
-
-    return () => {
-      isActive = false
-    }
+    setRegionReady(true)
   }, [])
 
   useEffect(() => {
     let isActive = true
 
     async function fetchRecommendations() {
-      if (!locationReady) {
+      if (!regionReady) {
         return
       }
 
@@ -126,21 +111,16 @@ export default function RecommendPage() {
           return
         }
 
-        const regionAwareProducts = ((data.products ?? []) as Product[]).map(product => {
-          const preferredUrl = region === 'global'
-            ? product.global_affiliate_url ?? product.affiliate_url
-            : product.affiliate_url
-
-          const linkRegion: Region = region === 'global' && product.global_affiliate_url
-            ? 'global'
-            : 'korea'
-
-          return {
+        const regionAwareProducts = ((data.products ?? []) as Product[])
+          .map(product => ({
             ...product,
-            display_affiliate_url: preferredUrl,
-            display_link_region: linkRegion,
-          }
-        }).filter(product => Boolean(product.display_affiliate_url))
+            display_affiliate_url:
+              region === 'korea' ? product.affiliate_url : product.global_affiliate_url,
+            display_link_region: region,
+          }))
+          .filter(product =>
+            region === 'global' ? Boolean(product.global_affiliate_url) : Boolean(product.affiliate_url)
+          )
 
         const productsWithExplanation = await Promise.all(
           regionAwareProducts.map(async product => {
@@ -177,7 +157,7 @@ export default function RecommendPage() {
     return () => {
       isActive = false
     }
-  }, [locationReady, region, router, selectedCategory])
+  }, [regionReady, region, router, selectedCategory])
 
   if (loading) {
     return (

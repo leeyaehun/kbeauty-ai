@@ -3,12 +3,16 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+import RegionModal from '@/components/RegionModal'
+import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
 
 export default function Home() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [region, setRegion] = useState<ShoppingRegion | null>(null)
+  const [showRegionModal, setShowRegionModal] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -16,7 +20,23 @@ export default function Home() {
       setUser(user)
       setLoading(false)
     })
+
+    const storedRegion = window.localStorage.getItem(REGION_STORAGE_KEY)
+
+    if (isShoppingRegion(storedRegion)) {
+      setRegion(storedRegion)
+      setShowRegionModal(false)
+      return
+    }
+
+    setShowRegionModal(true)
   }, [])
+
+  const handleRegionSelect = (nextRegion: ShoppingRegion) => {
+    window.localStorage.setItem(REGION_STORAGE_KEY, nextRegion)
+    setRegion(nextRegion)
+    setShowRegionModal(false)
+  }
 
   if (loading) {
     return (
@@ -34,6 +54,10 @@ export default function Home() {
 
   return (
     <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
+      {showRegionModal && (
+        <RegionModal onSelect={handleRegionSelect} />
+      )}
+
       <div className="brand-shell">
         <div className="mb-10 flex justify-center md:justify-start">
           <div className="brand-mark">K-Beauty AI</div>
@@ -113,6 +137,20 @@ export default function Home() {
 
             <div className="text-sm text-[var(--muted)]">
               {user ? `Signed in as ${user.email}` : 'No account required to try your first analysis.'}
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <button
+                onClick={() => setShowRegionModal(true)}
+                className="brand-button-ghost px-6 py-3 text-sm font-semibold"
+              >
+                Change Region
+              </button>
+              {region && (
+                <span className="text-sm text-[var(--muted)]">
+                  Current shopping region: {region === 'korea' ? 'Korea' : 'Global'}
+                </span>
+              )}
             </div>
           </div>
 
