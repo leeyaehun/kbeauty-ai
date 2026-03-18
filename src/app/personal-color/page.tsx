@@ -26,11 +26,23 @@ type PersonalColorResult = {
   celebrity_examples: string[]
 }
 
-const SEASON_LABELS: Record<PersonalColorResult['season'], { emoji: string, title: string }> = {
-  spring_warm: { emoji: '🌸', title: 'Spring Warm' },
-  summer_cool: { emoji: '🫧', title: 'Summer Cool' },
-  autumn_warm: { emoji: '🍂', title: 'Autumn Warm' },
-  winter_cool: { emoji: '❄️', title: 'Winter Cool' },
+const SEASON_LABELS: Record<PersonalColorResult['season'], { title: string, className: string }> = {
+  spring_warm: {
+    title: 'SPRING WARM',
+    className: 'bg-[#FFE4C4] text-[#8B4513]',
+  },
+  summer_cool: {
+    title: 'SUMMER COOL',
+    className: 'bg-[#E6E6FA] text-[#483D8B]',
+  },
+  autumn_warm: {
+    title: 'AUTUMN WARM',
+    className: 'bg-[#FFD700] text-[#8B6914]',
+  },
+  winter_cool: {
+    title: 'WINTER COOL',
+    className: 'bg-[#E0F0FF] text-[#1a3a5c]',
+  },
 }
 
 export default function PersonalColorPage() {
@@ -97,7 +109,7 @@ export default function PersonalColorPage() {
         <div className="brand-card flex max-w-md items-center gap-4 px-6 py-5">
           <div className="h-10 w-10 rounded-full border-4 border-[#ffb3d1]/60 border-t-[#ff6b9d] animate-spin" />
           <div>
-            <p className="text-sm font-semibold text-[#d94d82]">Reading your color story ✨</p>
+            <p className="text-sm font-semibold text-[#d94d82]">Reading your color story</p>
             <p className="text-sm text-[var(--muted)]">Analyzing undertone, eye color, and hair harmony.</p>
           </div>
         </div>
@@ -154,11 +166,17 @@ export default function PersonalColorPage() {
                 Pro analysis
               </div>
               <p className="text-sm uppercase tracking-[0.18em] text-[var(--muted)]">Your season</p>
-              <h1 className="mt-3 text-5xl font-semibold tracking-[-0.05em] text-[var(--ink)]">
-                {seasonMeta.emoji} {seasonMeta.title}
-              </h1>
-              <div className="mt-5 inline-flex rounded-full border border-[rgba(255,107,157,0.14)] bg-[#fff0f5] px-4 py-2 text-sm font-semibold text-[#c89b3c]">
-                {result.tone === 'warm' ? 'Warm Tone' : 'Cool Tone'}
+              <div className={`mt-4 inline-flex rounded-full px-5 py-3 text-sm font-semibold tracking-[0.16em] ${seasonMeta.className}`}>
+                {seasonMeta.title}
+              </div>
+              <div
+                className={`mt-5 inline-flex rounded-full border px-4 py-2 text-xs font-semibold tracking-[0.14em] ${
+                  result.tone === 'warm'
+                    ? 'border-[#CC5500] bg-[#FFF0E6] text-[#CC5500]'
+                    : 'border-[#0055CC] bg-[#E6F0FF] text-[#0055CC]'
+                }`}
+              >
+                {result.tone === 'warm' ? 'WARM TONE' : 'COOL TONE'}
               </div>
               <p className="mt-5 text-sm leading-7 text-[var(--muted)]">
                 {result.description}
@@ -193,7 +211,9 @@ export default function PersonalColorPage() {
 
           <section className="space-y-6">
             <div className="brand-card p-7 md:p-8">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Best colors</p>
+              <div className="border-b border-[rgba(148,163,184,0.18)] pb-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Best colors</p>
+              </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 {result.best_colors.map((color) => (
                   <div
@@ -211,7 +231,9 @@ export default function PersonalColorPage() {
             </div>
 
             <div className="brand-card p-7 md:p-8">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Colors to avoid</p>
+              <div className="border-b border-[rgba(148,163,184,0.18)] pb-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Colors to avoid</p>
+              </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 {result.avoid_colors.map((color) => (
                   <div
@@ -229,7 +251,9 @@ export default function PersonalColorPage() {
             </div>
 
             <div className="brand-card p-7 md:p-8">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Makeup recommendations</p>
+              <div className="border-b border-[rgba(148,163,184,0.18)] pb-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Makeup recommendations</p>
+              </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-[24px] bg-[#fff0f5] p-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">Foundation</p>
