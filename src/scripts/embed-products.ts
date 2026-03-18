@@ -1,128 +1,191 @@
+import { config as loadEnv } from 'dotenv'
 import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!
-})
+type SkinProfile = {
+  combination: number
+  dry: number
+  normal: number
+  oily: number
+  sensitive: number
+} | null
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+type ProductForEmbedding = {
+  brand: string | null
+  category: string | null
+  id: string
+  ingredient_names: string[] | null
+  name: string | null
+  skin_profile: SkinProfile
+}
+
+type IngredientScoreRow = {
+  skin_combination: number | null
+  skin_dry: number | null
+  skin_normal: number | null
+  skin_oily: number | null
+  skin_sensitive: number | null
+}
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const envPath = path.resolve(__dirname, '../../.env.local')
+
+loadEnv({ path: envPath })
+
+let openai: OpenAI | null = null
+let supabase:
+  | ReturnType<typeof createClient>
+  | null = null
+
+function getOpenAI() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error(`OPENAI_API_KEY is missing. Check ${envPath}.`)
+  }
+
+  if (!openai) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
+  }
+
+  return openai
+}
+
+function getSupabase() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(`Supabase env vars are missing. Check ${envPath}.`)
+  }
+
+  if (!supabase) {
+    supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    )
+  }
+
+  return supabase
+}
 
 async function generateEmbedding(text: string) {
-  const response = await openai.embeddings.create({
+  const response = await getOpenAI().embeddings.create({
     model: 'text-embedding-3-small',
     input: text,
   })
   return response.data[0].embedding
 }
 
-function buildProductText(product: any) {
-  // 제품 정보를 텍스트로 변환 (임베딩용)
+function buildProductText(product: ProductForEmbedding) {
   const parts = [
-    `브랜드: ${product.brand}`,
-    `제품명: ${product.name}`,
-    `카테고리: ${product.category}`,
-    `성분: ${(product.ingredient_names || []).slice(0, 20).join(', ')}`,
+    `브랜드: ${product.brand ?? ''}`,
+    `제품명: ${product.name ?? ''}`,
+    `카테고리: ${product.category ?? ''}`,
+    `성분: ${(product.ingredient_names ?? []).slice(0, 20).join(', ')}`,
   ]
 
   if (product.skin_profile) {
-    const p = product.skin_profile
-    parts.push(`피부타입 적합성: 건성${p.dry} 지성${p.oily} 복합성${p.combination} 민감성${p.sensitive}`)
+    const profile = product.skin_profile
+    parts.push(
+      `피부타입 적합성: 건성${profile.dry} 지성${profile.oily} 복합성${profile.combination} 민감성${profile.sensitive}`
+    )
   }
 
   return parts.join(' | ')
 }
 
 async function buildSkinProfile(ingredientNames: string[]) {
-  if (!ingredientNames || ingredientNames.length === 0) return null
+  if (!ingredientNames || ingredientNames.length === 0) {
+    return null
+  }
 
-  // 성분명으로 DB에서 점수 조회
-  const { data: ingredients } = await supabase
+  const { data: ingredients } = await getSupabase()
     .from('ingredients')
     .select('skin_dry, skin_oily, skin_combination, skin_sensitive, skin_normal')
     .in('name_ko', ingredientNames)
 
-  if (!ingredients || ingredients.length === 0) return null
+  if (!ingredients || ingredients.length === 0) {
+    return null
+  }
 
-  // 성분별 점수 평균 계산
-  const avg = (key: string) => {
-    const scores = ingredients
-      .map((i: any) => i[key])
-      .filter((v: any) => v !== null && v !== undefined)
+  const rows = ingredients as IngredientScoreRow[]
+  const avg = (key: keyof IngredientScoreRow) => {
+    const scores = rows.map((row) => row[key]).filter((value): value is number => value !== null)
+
     return scores.length > 0
-      ? Math.round((scores.reduce((a: number, b: number) => a + b, 0) / scores.length) * 10) / 10
+      ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10
       : 3.0
   }
 
   return {
-    dry: avg('skin_dry'),
-    oily: avg('skin_oily'),
     combination: avg('skin_combination'),
-    sensitive: avg('skin_sensitive'),
+    dry: avg('skin_dry'),
     normal: avg('skin_normal'),
+    oily: avg('skin_oily'),
+    sensitive: avg('skin_sensitive'),
   }
 }
 
-async function main() {
+export async function embedMissingProducts() {
   console.log('제품 임베딩 생성 시작...')
 
-  // 임베딩 없는 제품만 가져오기
-  const { data: products, error } = await supabase
+  const { data: products, error } = await getSupabase()
     .from('products')
     .select('id, name, brand, category, ingredient_names, skin_profile')
     .is('embedding', null)
 
   if (error) {
-    console.error('제품 조회 실패:', error.message)
-    return
+    throw new Error(`제품 조회 실패: ${error.message}`)
   }
 
-  console.log(`임베딩 생성할 제품 ${products.length}개`)
+  const rows = (products ?? []) as ProductForEmbedding[]
+
+  console.log(`임베딩 생성 대상 ${rows.length}개`)
 
   let success = 0
   let failed = 0
 
-  for (const product of products) {
+  for (const product of rows) {
     try {
-      // 1. 피부 프로파일 계산
-      const skinProfile = await buildSkinProfile(product.ingredient_names || [])
-
-      // 2. 제품 텍스트 생성
-      const productWithProfile = { ...product, skin_profile: skinProfile }
-      const text = buildProductText(productWithProfile)
-
-      // 3. 임베딩 생성
+      const skinProfile = await buildSkinProfile(product.ingredient_names ?? [])
+      const text = buildProductText({
+        ...product,
+        skin_profile: skinProfile,
+      })
       const embedding = await generateEmbedding(text)
 
-      // 4. DB 업데이트
-      const { error: updateError } = await supabase
+      const { error: updateError } = await getSupabase()
         .from('products')
         .update({
+          embedding,
           skin_profile: skinProfile,
-          embedding: embedding,
         })
         .eq('id', product.id)
 
       if (updateError) {
-        failed++
-        console.error(`실패: ${product.name}`, updateError.message)
+        failed += 1
+        console.error(`실패: ${product.name ?? product.id}`, updateError.message)
       } else {
-        success++
-        console.log(`[${success}/${products.length}] ${product.brand} - ${product.name}`)
+        success += 1
+        console.log(`[${success}/${rows.length}] ${product.brand ?? ''} - ${product.name ?? product.id}`)
       }
 
-      // API 과호출 방지
-      await new Promise(r => setTimeout(r, 200))
-
-    } catch (e) {
-      failed++
-      console.error(`오류: ${product.name}`, e)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    } catch (error) {
+      failed += 1
+      console.error(`오류: ${product.name ?? product.id}`, error)
     }
   }
 
-  console.log(`\n완료! 성공 ${success}개, 실패 ${failed}개`)
+  console.log(`\n임베딩 완료: 성공 ${success}개, 실패 ${failed}개`)
 }
 
-main().catch(console.error)
+const isMain = process.argv[1] ? path.resolve(process.argv[1]) === __filename : false
+
+if (isMain) {
+  embedMissingProducts().catch((error) => {
+    console.error(error)
+    process.exit(1)
+  })
+}
