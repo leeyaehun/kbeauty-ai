@@ -86,7 +86,7 @@ function isRetryableSupabaseError(error: unknown) {
   )
 }
 
-async function withSupabaseRetry<T>(label: string, operation: () => Promise<T>) {
+async function withSupabaseRetry<T>(label: string, operation: () => PromiseLike<T> | T) {
   let lastError: unknown = null
 
   for (let attempt = 1; attempt <= 5; attempt++) {

@@ -29,6 +29,9 @@ type IngredientScoreRow = {
   skin_sensitive: number | null
 }
 
+const EMBED_BATCH_SIZE = 1000
+const EMBED_RETRY_COUNT = 3
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const envPath = path.resolve(__dirname, '../../.env.local')
@@ -113,54 +116,101 @@ async function buildSkinProfile(ingredientNames: string[]) {
   }
 }
 
-export async function embedMissingProducts() {
-  console.log('제품 임베딩 생성 시작...')
-
+async function fetchEmbeddingBatch() {
   const { data: products, error } = await supabase
     .from('products')
     .select('id, name, brand, category, ingredient_names, skin_profile')
     .is('embedding', null)
+    .order('id', { ascending: true })
+    .limit(EMBED_BATCH_SIZE)
 
   if (error) {
     throw new Error(`제품 조회 실패: ${error.message}`)
   }
 
-  const rows = (products ?? []) as ProductForEmbedding[]
+  return (products ?? []) as ProductForEmbedding[]
+}
 
-  console.log(`임베딩 생성 대상 ${rows.length}개`)
+async function embedSingleProduct(product: ProductForEmbedding) {
+  const skinProfile = await buildSkinProfile(product.ingredient_names ?? [])
+  const text = buildProductText({
+    ...product,
+    skin_profile: skinProfile,
+  })
+  const embedding = await generateEmbedding(text)
+
+  const { error: updateError } = await supabase
+    .from('products')
+    .update({
+      embedding,
+      skin_profile: skinProfile,
+    })
+    .eq('id', product.id)
+
+  if (updateError) {
+    throw new Error(updateError.message)
+  }
+}
+
+export async function embedMissingProducts() {
+  console.log('제품 임베딩 생성 시작...')
 
   let success = 0
   let failed = 0
 
-  for (const product of rows) {
-    try {
-      const skinProfile = await buildSkinProfile(product.ingredient_names ?? [])
-      const text = buildProductText({
-        ...product,
-        skin_profile: skinProfile,
-      })
-      const embedding = await generateEmbedding(text)
+  while (true) {
+    const rows = await fetchEmbeddingBatch()
 
-      const { error: updateError } = await supabase
-        .from('products')
-        .update({
-          embedding,
-          skin_profile: skinProfile,
-        })
-        .eq('id', product.id)
+    if (rows.length === 0) {
+      break
+    }
 
-      if (updateError) {
+    console.log(`배치 임베딩 대상 ${rows.length}개`)
+
+    let batchSuccess = 0
+    let batchFailed = 0
+
+    for (const product of rows) {
+      let lastError: unknown = null
+
+      for (let attempt = 1; attempt <= EMBED_RETRY_COUNT; attempt += 1) {
+        try {
+          await embedSingleProduct(product)
+          success += 1
+          batchSuccess += 1
+          console.log(
+            `[success ${success}] ${product.brand ?? ''} - ${product.name ?? product.id}`
+          )
+          lastError = null
+          break
+        } catch (error) {
+          lastError = error
+
+          if (attempt < EMBED_RETRY_COUNT) {
+            console.warn(
+              `재시도 ${attempt}/${EMBED_RETRY_COUNT - 1}: ${product.name ?? product.id}`
+            )
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+          }
+        }
+      }
+
+      if (lastError) {
         failed += 1
-        console.error(`실패: ${product.name ?? product.id}`, updateError.message)
-      } else {
-        success += 1
-        console.log(`[${success}/${rows.length}] ${product.brand ?? ''} - ${product.name ?? product.id}`)
+        batchFailed += 1
+        console.error(`오류: ${product.name ?? product.id}`, lastError)
       }
 
       await new Promise((resolve) => setTimeout(resolve, 200))
-    } catch (error) {
-      failed += 1
-      console.error(`오류: ${product.name ?? product.id}`, error)
+    }
+
+    console.log(
+      `배치 완료: 성공 ${batchSuccess}개, 실패 ${batchFailed}개, 누적 성공 ${success}개, 누적 실패 ${failed}개`
+    )
+
+    if (batchSuccess === 0 && batchFailed > 0) {
+      console.error('현재 배치에서 임베딩을 전혀 저장하지 못해 종료합니다.')
+      break
     }
   }
 
