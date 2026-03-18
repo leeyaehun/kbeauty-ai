@@ -1,34 +1,17 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import UpgradeModal from '@/components/UpgradeModal'
-
-type ColorSwatch = {
-  name: string
-  hex: string
-}
-
-type ProductRecommendation = {
-  brand: string
-  name: string
-  reason: string
-  olive_young_url: string
-}
-
-type ProductRecommendationSection = {
-  tip: string
-  recommended_products: ProductRecommendation[]
-}
 
 type PersonalColorResult = {
   season: 'spring_warm' | 'summer_cool' | 'autumn_warm' | 'winter_cool'
   tone: 'warm' | 'cool'
   description: string
   characteristics: string[]
-  best_colors: ColorSwatch[]
-  avoid_colors: ColorSwatch[]
+  best_colors: string[]
+  avoid_colors: string[]
   makeup_recommendations: {
     foundation: string
     lip: string
@@ -36,41 +19,44 @@ type PersonalColorResult = {
     eyeshadow: string
   }
   celebrity_examples: string[]
-  product_recommendations: {
-    foundation: ProductRecommendationSection
-    lip: ProductRecommendationSection
-    blush: ProductRecommendationSection
-    eyeshadow: ProductRecommendationSection
+}
+
+const SEASON_LABELS: Record<PersonalColorResult['season'], { emoji: string, title: string }> = {
+  spring_warm: { emoji: '🌸', title: 'Spring Warm' },
+  summer_cool: { emoji: '🫧', title: 'Summer Cool' },
+  autumn_warm: { emoji: '🍂', title: 'Autumn Warm' },
+  winter_cool: { emoji: '❄️', title: 'Winter Cool' },
+}
+
+function stringToColor(label: string) {
+  const presets: Record<string, string> = {
+    coral: '#ff7f6e',
+    peach: '#ffb38a',
+    apricot: '#f7a85d',
+    'warm red': '#d9485f',
+    'golden yellow': '#f5c451',
+    olive: '#7c8b4b',
+    'cool gray': '#94a3b8',
+    'icy blue': '#c7e7ff',
+    'warm brown': '#8b5e3c',
+    gold: '#d4af37',
+    beige: '#d6b28a',
+    plum: '#7b4a8b',
   }
+
+  const normalized = label.toLowerCase().trim()
+
+  if (presets[normalized]) {
+    return presets[normalized]
+  }
+
+  let hash = 0
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash = normalized.charCodeAt(index) + ((hash << 5) - hash)
+  }
+
+  return `hsl(${Math.abs(hash) % 360} 72% 68%)`
 }
-
-type MakeupTabKey = keyof PersonalColorResult['product_recommendations']
-
-const SEASON_STYLES: Record<PersonalColorResult['season'], { label: string, badgeClass: string }> = {
-  spring_warm: {
-    label: 'Spring Warm',
-    badgeClass: 'bg-[linear-gradient(135deg,rgba(255,182,193,0.62),rgba(255,240,245,0.94))] text-[#c25174]',
-  },
-  summer_cool: {
-    label: 'Summer Cool',
-    badgeClass: 'bg-[linear-gradient(135deg,rgba(221,232,255,0.72),rgba(255,255,255,0.96))] text-[#5778b8]',
-  },
-  autumn_warm: {
-    label: 'Autumn Warm',
-    badgeClass: 'bg-[linear-gradient(135deg,rgba(245,197,129,0.74),rgba(255,245,228,0.96))] text-[#a9602d]',
-  },
-  winter_cool: {
-    label: 'Winter Cool',
-    badgeClass: 'bg-[linear-gradient(135deg,rgba(209,221,255,0.74),rgba(255,255,255,0.96))] text-[#4c5d8f]',
-  },
-}
-
-const MAKEUP_TABS: Array<{ key: MakeupTabKey, label: string }> = [
-  { key: 'foundation', label: 'Foundation' },
-  { key: 'lip', label: 'Lip' },
-  { key: 'blush', label: 'Blush' },
-  { key: 'eyeshadow', label: 'Eyeshadow' },
-]
 
 export default function PersonalColorPage() {
   const router = useRouter()
@@ -79,7 +65,6 @@ export default function PersonalColorPage() {
   const [result, setResult] = useState<PersonalColorResult | null>(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [paramsReady, setParamsReady] = useState(false)
-  const [activeTab, setActiveTab] = useState<MakeupTabKey>('foundation')
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
@@ -129,17 +114,16 @@ export default function PersonalColorPage() {
     analyzePersonalColor()
   }, [paramsReady, router, showUpgrade])
 
-  const seasonMeta = useMemo(() => (result ? SEASON_STYLES[result.season] : null), [result])
-  const activeRecommendation = result ? result.product_recommendations[activeTab] : null
+  const seasonMeta = result ? SEASON_LABELS[result.season] : null
 
   if (loading) {
     return (
-      <main className="brand-page flex min-h-screen overflow-y-auto px-6 pb-24 pt-8">
-        <div className="brand-card mx-auto flex w-full max-w-md items-center gap-4 px-6 py-5">
+      <main className="brand-page flex items-center justify-center px-6">
+        <div className="brand-card flex max-w-md items-center gap-4 px-6 py-5">
           <div className="h-10 w-10 rounded-full border-4 border-[#ffb3d1]/60 border-t-[#ff6b9d] animate-spin" />
-          <div className="min-w-0 break-words">
-            <p className="break-words text-sm font-semibold text-[#d94d82]">Reading your color story</p>
-            <p className="break-words text-sm text-[var(--muted)]">Analyzing undertone, eye color, and hair harmony.</p>
+          <div>
+            <p className="text-sm font-semibold text-[#d94d82]">Reading your color story ✨</p>
+            <p className="text-sm text-[var(--muted)]">Analyzing undertone, eye color, and hair harmony.</p>
           </div>
         </div>
       </main>
@@ -148,8 +132,8 @@ export default function PersonalColorPage() {
 
   if (showUpgrade) {
     return (
-      <main className="brand-page brand-grid min-h-screen overflow-y-auto px-6 pb-24 pt-8 md:px-8 md:py-10">
-        <div className="brand-shell max-w-3xl break-words">
+      <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
+        <div className="brand-shell max-w-3xl">
           <div className="mb-8 flex justify-center md:justify-start">
             <div className="brand-mark">K-Beauty AI</div>
           </div>
@@ -161,11 +145,11 @@ export default function PersonalColorPage() {
 
   if (error) {
     return (
-      <main className="brand-page flex min-h-screen overflow-y-auto px-6 pb-24 pt-10">
-        <div className="brand-card mx-auto w-full max-w-lg p-8 text-center">
+      <main className="brand-page flex items-center justify-center px-6 py-10">
+        <div className="brand-card max-w-lg p-8 text-center">
           <div className="brand-mark mx-auto">K-Beauty AI</div>
-          <h1 className="mt-6 break-words text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Personal color is unavailable</h1>
-          <p className="mt-4 break-words text-base leading-7 text-[var(--muted)]">{error}</p>
+          <h1 className="mt-6 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Personal color is unavailable</h1>
+          <p className="mt-4 text-base leading-7 text-[var(--muted)]">{error}</p>
           <button
             onClick={() => router.push('/results')}
             className="brand-button-primary mt-8 px-8 py-4 font-semibold"
@@ -177,56 +161,53 @@ export default function PersonalColorPage() {
     )
   }
 
-  if (!result || !seasonMeta || !activeRecommendation) {
+  if (!result || !seasonMeta) {
     return null
   }
 
   return (
-    <main className="brand-page brand-grid min-h-screen overflow-y-auto px-6 pb-24 pt-8 md:px-8 md:py-10">
-      <div className="brand-shell min-w-0 break-words">
+    <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
+      <div className="brand-shell">
         <div className="mb-8 flex justify-center md:justify-start">
           <div className="brand-mark">K-Beauty AI</div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
           <aside className="space-y-6">
-            <div className="brand-card min-w-0 overflow-hidden p-8">
+            <div className="brand-card overflow-hidden p-8">
               <div className="mb-4 inline-flex rounded-full bg-[linear-gradient(135deg,rgba(255,107,157,0.14),rgba(246,222,177,0.34))] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">
                 Pro analysis
               </div>
-              <p className="break-words text-sm uppercase tracking-[0.18em] text-[var(--muted)]">Your season</p>
-              <div className={`mt-4 inline-flex rounded-full px-5 py-3 text-base font-semibold ${seasonMeta.badgeClass}`}>
-                {seasonMeta.label}
-              </div>
-              <div className="mt-4 inline-flex rounded-full border border-[rgba(255,107,157,0.14)] bg-[#fff0f5] px-4 py-2 text-sm font-semibold text-[#c89b3c]">
+              <p className="text-sm uppercase tracking-[0.18em] text-[var(--muted)]">Your season</p>
+              <h1 className="mt-3 text-5xl font-semibold tracking-[-0.05em] text-[var(--ink)]">
+                {seasonMeta.emoji} {seasonMeta.title}
+              </h1>
+              <div className="mt-5 inline-flex rounded-full border border-[rgba(255,107,157,0.14)] bg-[#fff0f5] px-4 py-2 text-sm font-semibold text-[#c89b3c]">
                 {result.tone === 'warm' ? 'Warm Tone' : 'Cool Tone'}
               </div>
-              <p className="mt-5 break-words text-sm leading-7 text-[var(--muted)]">
+              <p className="mt-5 text-sm leading-7 text-[var(--muted)]">
                 {result.description}
-              </p>
-              <p className="mt-5 break-words rounded-[22px] border border-[rgba(200,155,60,0.18)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(246,222,177,0.34))] px-5 py-4 text-sm leading-6 text-[var(--muted-strong)]">
-                For best results, take your photo in natural daylight.
               </p>
             </div>
 
-            <div className="brand-card min-w-0 p-7">
-              <p className="break-words text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Key characteristics</p>
+            <div className="brand-card p-7">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Key characteristics</p>
               <div className="mt-4 flex flex-wrap gap-3">
                 {result.characteristics.map((item) => (
-                  <span key={item} className="brand-chip break-words px-4 py-2 text-sm font-medium">
+                  <span key={item} className="brand-chip px-4 py-2 text-sm font-medium">
                     {item}
                   </span>
                 ))}
               </div>
             </div>
 
-            <div className="brand-card min-w-0 p-7">
-              <p className="break-words text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Celebrity inspiration</p>
+            <div className="brand-card p-7">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Celebrity inspiration</p>
               <div className="mt-4 flex flex-wrap gap-3">
                 {result.celebrity_examples.map((name) => (
                   <span
                     key={name}
-                    className="rounded-full bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(246,222,177,0.42))] px-4 py-2 text-sm font-semibold text-[var(--ink)] break-words shadow-[0_12px_20px_rgba(149,64,109,0.06)]"
+                    className="rounded-full bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(246,222,177,0.42))] px-4 py-2 text-sm font-semibold text-[var(--ink)] shadow-[0_12px_20px_rgba(149,64,109,0.06)]"
                   >
                     {name}
                   </span>
@@ -236,98 +217,61 @@ export default function PersonalColorPage() {
           </aside>
 
           <section className="space-y-6">
-            <div className="brand-card min-w-0 p-7 md:p-8">
-              <p className="break-words text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Best colors</p>
-              <div className="mt-5 flex flex-wrap gap-3">
+            <div className="brand-card p-7 md:p-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Best colors</p>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 {result.best_colors.map((color) => (
                   <div
-                    key={`${color.name}-${color.hex}`}
-                    className="w-[calc(20%-0.6rem)] min-w-[56px] max-w-[72px] flex-1 rounded-[24px] border border-[rgba(255,107,157,0.12)] bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(255,240,245,0.92))] p-3 text-center shadow-[0_14px_24px_rgba(149,64,109,0.08)]"
+                    key={color}
+                    className="rounded-[24px] border border-[rgba(255,107,157,0.12)] bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(255,240,245,0.92))] p-4 shadow-[0_14px_24px_rgba(149,64,109,0.08)]"
                   >
                     <div
-                      className="mx-auto h-12 w-12 rounded-full shadow-[inset_0_2px_6px_rgba(255,255,255,0.35)] sm:h-14 sm:w-14"
-                      style={{ backgroundColor: color.hex }}
+                      className="h-14 w-14 rounded-full shadow-[inset_0_2px_6px_rgba(255,255,255,0.35)]"
+                      style={{ backgroundColor: stringToColor(color) }}
                     />
-                    <p className="mt-3 break-words text-xs font-semibold text-[var(--ink)] sm:text-sm">{color.name}</p>
-                    <p className="mt-1 break-all text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--muted)] sm:text-xs">{color.hex}</p>
+                    <p className="mt-3 text-sm font-semibold text-[var(--ink)]">{color}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="brand-card min-w-0 p-7 md:p-8">
-              <p className="break-words text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Colors to avoid</p>
-              <div className="mt-5 flex flex-wrap gap-3">
+            <div className="brand-card p-7 md:p-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Colors to avoid</p>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 {result.avoid_colors.map((color) => (
                   <div
-                    key={`${color.name}-${color.hex}`}
-                    className="w-[calc(20%-0.6rem)] min-w-[56px] max-w-[72px] flex-1 rounded-[24px] border border-[rgba(148,163,184,0.18)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(241,245,249,0.96))] p-3 text-center shadow-[0_14px_24px_rgba(100,116,139,0.08)]"
+                    key={color}
+                    className="rounded-[24px] border border-[rgba(148,163,184,0.18)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(241,245,249,0.96))] p-4 shadow-[0_14px_24px_rgba(100,116,139,0.08)]"
                   >
                     <div
-                      className="mx-auto h-12 w-12 rounded-full shadow-[inset_0_2px_6px_rgba(255,255,255,0.35)] sm:h-14 sm:w-14"
-                      style={{ backgroundColor: color.hex }}
+                      className="h-14 w-14 rounded-full shadow-[inset_0_2px_6px_rgba(255,255,255,0.35)]"
+                      style={{ backgroundColor: stringToColor(color) }}
                     />
-                    <p className="mt-3 break-words text-xs font-semibold text-[var(--ink)] sm:text-sm">{color.name}</p>
-                    <p className="mt-1 break-all text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--muted)] sm:text-xs">{color.hex}</p>
+                    <p className="mt-3 text-sm font-semibold text-[var(--ink)]">{color}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="brand-card min-w-0 p-7 md:p-8">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="break-words text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">K-beauty picks</p>
-                  <h2 className="mt-2 break-words text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
-                    Makeup recommendations
-                  </h2>
+            <div className="brand-card p-7 md:p-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Makeup recommendations</p>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-[24px] bg-[#fff0f5] p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">Foundation</p>
+                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{result.makeup_recommendations.foundation}</p>
                 </div>
-              </div>
-
-              <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
-                {MAKEUP_TABS.map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    className={`rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap transition-all ${
-                      activeTab === tab.key
-                        ? 'brand-button-primary'
-                        : 'brand-button-secondary'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-5 rounded-[24px] border border-[rgba(255,107,157,0.12)] bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(255,240,245,0.92))] p-5 shadow-[0_14px_24px_rgba(149,64,109,0.08)]">
-                <p className="break-words text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">Category tip</p>
-                <p className="mt-3 break-words text-sm leading-7 text-[var(--ink)]">{activeRecommendation.tip}</p>
-              </div>
-
-              <div className="mt-5 grid gap-4">
-                {activeRecommendation.recommended_products.map((product) => (
-                  <div
-                    key={`${product.brand}-${product.name}`}
-                    className="w-full max-w-full min-w-0 rounded-[24px] border border-[rgba(255,107,157,0.12)] bg-white/95 p-5 shadow-[0_14px_24px_rgba(149,64,109,0.08)]"
-                  >
-                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <p className="break-words text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">{product.brand}</p>
-                        <h3 className="mt-2 line-clamp-2 break-words text-xl font-semibold tracking-[-0.03em] text-[var(--ink)]">{product.name}</h3>
-                        <p className="mt-3 line-clamp-2 break-words text-sm leading-7 text-[var(--muted)]">{product.reason}</p>
-                      </div>
-                      <a
-                        href={product.olive_young_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="brand-button-secondary w-full shrink-0 px-5 py-3 text-center font-semibold md:w-auto"
-                      >
-                        Search on Olive Young Global
-                      </a>
-                    </div>
-                  </div>
-                ))}
+                <div className="rounded-[24px] bg-white p-5 shadow-[0_14px_24px_rgba(149,64,109,0.08)]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">Lip</p>
+                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{result.makeup_recommendations.lip}</p>
+                </div>
+                <div className="rounded-[24px] bg-white p-5 shadow-[0_14px_24px_rgba(149,64,109,0.08)]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">Blush</p>
+                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{result.makeup_recommendations.blush}</p>
+                </div>
+                <div className="rounded-[24px] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(246,222,177,0.45))] p-5 shadow-[0_14px_24px_rgba(149,64,109,0.08)]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#c89b3c]">Eyeshadow</p>
+                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{result.makeup_recommendations.eyeshadow}</p>
+                </div>
               </div>
             </div>
           </section>
