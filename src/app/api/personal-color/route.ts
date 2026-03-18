@@ -2,21 +2,27 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 
+import { getBrandGlobalUrl, hasBrandGlobalUrl } from '@/lib/brand-global-urls'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
 type MakeupCategoryKey = 'foundation' | 'lip' | 'blush' | 'eyeshadow'
+type ProductLinkType = 'oliveyoung_global' | 'brand_site' | 'search'
 
 type MakeupProduct = {
   brand: string
   name: string
   reason: string
   shade: string
+  product_url: string
+  link_type: ProductLinkType
 }
 
 type MakeupProductSection = {
   tip: string
   products: MakeupProduct[]
 }
+
+type MakeupProductSeed = Omit<MakeupProduct, 'product_url' | 'link_type'>
 
 type PersonalColorResult = {
   season: 'spring_warm' | 'summer_cool' | 'autumn_warm' | 'winter_cool'
@@ -42,6 +48,27 @@ const SEASON_BRANDS: Record<PersonalColorResult['season'], string[]> = {
   summer_cool: ['CLIO', 'Hera', 'Sulwhasoo', 'Moonshot'],
   autumn_warm: ['3CE', 'Espoir', 'Amuse', 'VDL'],
   winter_cool: ['MAC Korea', 'CLIO', 'Hera', 'Giorgio Armani Beauty Korea'],
+}
+
+const MAKEUP_CATEGORIES: MakeupCategoryKey[] = ['foundation', 'lip', 'blush', 'eyeshadow']
+
+type ProductLookupRow = {
+  brand: string | null
+  name: string | null
+  category: string | null
+  affiliate_url: string | null
+  global_affiliate_url: string | null
+}
+
+function isMissingGlobalAffiliateUrlColumn(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const code = 'code' in error ? error.code : null
+  const message = 'message' in error ? error.message : null
+
+  return code === '42703' && typeof message === 'string' && message.includes('global_affiliate_url')
 }
 
 function getOpenAIClient() {
@@ -142,6 +169,23 @@ function normalizeTone(value: unknown, season: PersonalColorResult['season']): P
   return season.includes('warm') ? 'warm' : 'cool'
 }
 
+function normalizeForMatch(value: string) {
+  return value
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function buildOliveYoungSearchUrl(brand: string, productName: string) {
+  const url = new URL('https://global.oliveyoung.com/search')
+  url.searchParams.set('query', `${brand} ${productName}`.trim())
+  return url.toString()
+}
+
 function seasonLabel(season: PersonalColorResult['season']) {
   return season
     .split('_')
@@ -152,7 +196,7 @@ function seasonLabel(season: PersonalColorResult['season']) {
 function buildFallbackProductRecommendations(
   season: PersonalColorResult['season']
 ): Record<MakeupCategoryKey, MakeupProductSection> {
-  const presets: Record<PersonalColorResult['season'], Record<MakeupCategoryKey, MakeupProductSection>> = {
+  const presets: Record<PersonalColorResult['season'], Record<MakeupCategoryKey, { tip: string, products: MakeupProductSeed[] }>> = {
     spring_warm: {
       foundation: {
         tip: 'Choose radiant bases with warm beige or peach undertones to keep your complexion fresh.',
@@ -275,7 +319,19 @@ function buildFallbackProductRecommendations(
     },
   }
 
-  return presets[season]
+  return Object.fromEntries(
+    Object.entries(presets[season]).map(([category, section]) => [
+      category,
+      {
+        ...section,
+        products: section.products.map((product) => ({
+          ...product,
+          product_url: buildOliveYoungSearchUrl(product.brand, product.name),
+          link_type: 'search' as const,
+        })),
+      },
+    ])
+  ) as Record<MakeupCategoryKey, MakeupProductSection>
 }
 
 function normalizeMakeupSection(value: unknown, fallback: MakeupProductSection): MakeupProductSection {
@@ -294,7 +350,16 @@ function normalizeMakeupSection(value: unknown, fallback: MakeupProductSection):
             name: typeof product.name === 'string' ? product.name : '',
             reason: typeof product.reason === 'string' ? product.reason : '',
             shade: typeof product.shade === 'string' ? product.shade : '',
-          }
+            product_url: typeof product.product_url === 'string'
+              ? product.product_url
+              : buildOliveYoungSearchUrl(
+                  typeof product.brand === 'string' ? product.brand : '',
+                  typeof product.name === 'string' ? product.name : ''
+                ),
+            link_type: product.link_type === 'oliveyoung_global' || product.link_type === 'brand_site' || product.link_type === 'search'
+              ? product.link_type
+              : 'search',
+          } as MakeupProduct
         })
         .filter((product) => product.brand && product.name && product.reason && product.shade)
         .slice(0, 2)
@@ -318,6 +383,121 @@ function normalizeProductRecommendations(
     lip: normalizeMakeupSection(source.lip, fallback.lip),
     blush: normalizeMakeupSection(source.blush, fallback.blush),
     eyeshadow: normalizeMakeupSection(source.eyeshadow, fallback.eyeshadow),
+  }
+}
+
+function resolveProductLinks(
+  recommendations: Record<MakeupCategoryKey, MakeupProductSection>,
+  lookupRows: ProductLookupRow[]
+) {
+  const rowsByCategory = new Map<MakeupCategoryKey, ProductLookupRow[]>()
+
+  for (const category of MAKEUP_CATEGORIES) {
+    rowsByCategory.set(
+      category,
+      lookupRows.filter((row) => row.category === category)
+    )
+  }
+
+  for (const category of MAKEUP_CATEGORIES) {
+    recommendations[category] = {
+      ...recommendations[category],
+      products: recommendations[category].products.map((product) => {
+        const candidates = rowsByCategory.get(category) ?? []
+        const brandNeedle = normalizeForMatch(product.brand)
+        const nameNeedle = normalizeForMatch(product.name)
+
+        const matchedRow = candidates
+          .map((row) => {
+            const haystack = normalizeForMatch(`${row.brand ?? ''} ${row.name ?? ''}`)
+            let score = 0
+
+            if (brandNeedle && haystack.includes(brandNeedle)) {
+              score += 4
+            }
+
+            if (nameNeedle && haystack.includes(nameNeedle)) {
+              score += 8
+            }
+
+            if (normalizeForMatch(row.name ?? '') === nameNeedle) {
+              score += 4
+            }
+
+            return { row, score }
+          })
+          .filter((entry) => entry.score >= 8)
+          .sort((left, right) => right.score - left.score)[0]?.row
+
+        if (matchedRow?.global_affiliate_url || matchedRow?.affiliate_url) {
+          return {
+            ...product,
+            product_url: matchedRow.global_affiliate_url ?? matchedRow.affiliate_url ?? buildOliveYoungSearchUrl(product.brand, product.name),
+            link_type: 'oliveyoung_global' as const,
+          }
+        }
+
+        if (hasBrandGlobalUrl(product.brand)) {
+          return {
+            ...product,
+            product_url: getBrandGlobalUrl(product.brand, product.name),
+            link_type: 'brand_site' as const,
+          }
+        }
+
+        return {
+          ...product,
+          product_url: buildOliveYoungSearchUrl(product.brand, product.name),
+          link_type: 'search' as const,
+        }
+      }),
+    }
+  }
+
+  return recommendations
+}
+
+async function loadMakeupProductLinks(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
+  const fullQuery = await supabase
+    .from('products')
+    .select('brand, name, category, affiliate_url, global_affiliate_url')
+    .in('category', MAKEUP_CATEGORIES)
+
+  if (!fullQuery.error) {
+    return {
+      data: (fullQuery.data ?? []) as ProductLookupRow[],
+      error: null,
+    }
+  }
+
+  if (!isMissingGlobalAffiliateUrlColumn(fullQuery.error)) {
+    return {
+      data: null,
+      error: fullQuery.error,
+    }
+  }
+
+  const fallbackQuery = await supabase
+    .from('products')
+    .select('brand, name, category, affiliate_url')
+    .in('category', MAKEUP_CATEGORIES)
+
+  if (fallbackQuery.error) {
+    return {
+      data: null,
+      error: fallbackQuery.error,
+    }
+  }
+
+  return {
+    data: (fallbackQuery.data ?? []).map((product) => ({
+      brand: product.brand,
+      name: product.name,
+      category: product.category,
+      affiliate_url: product.affiliate_url,
+      global_affiliate_url: null,
+    })) as ProductLookupRow[],
+    error: null,
   }
 }
 
@@ -509,6 +689,17 @@ export async function POST(req: NextRequest) {
     } catch (recommendationError) {
       console.error('Makeup recommendation error:', recommendationError)
     }
+
+    const { data: productRows, error: productLookupError } = await loadMakeupProductLinks(supabase)
+
+    if (productLookupError) {
+      throw new Error(`Failed to load makeup product links: ${productLookupError.message}`)
+    }
+
+    productRecommendations = resolveProductLinks(
+      productRecommendations,
+      (productRows ?? []) as ProductLookupRow[]
+    )
 
     return NextResponse.json({
       ...normalizedResult,

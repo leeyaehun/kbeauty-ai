@@ -11,12 +11,15 @@ type ColorSwatch = {
 }
 
 type MakeupCategoryKey = 'foundation' | 'lip' | 'blush' | 'eyeshadow'
+type ProductLinkType = 'oliveyoung_global' | 'brand_site' | 'search'
 
 type MakeupProduct = {
   brand: string
   name: string
   reason: string
   shade: string
+  product_url: string
+  link_type: ProductLinkType
 }
 
 type MakeupProductSection = {
@@ -71,6 +74,26 @@ function buildOliveYoungSearchUrl(brand: string, name: string) {
   const url = new URL('https://global.oliveyoung.com/search')
   url.searchParams.set('query', `${brand} ${name}`.trim())
   return url.toString()
+}
+
+function getProductButtonMeta(linkType: ProductLinkType) {
+  switch (linkType) {
+    case 'oliveyoung_global':
+      return {
+        label: 'Shop on Olive Young Global',
+        className: 'bg-[#1d8a5b] text-white hover:bg-[#176d48]',
+      }
+    case 'brand_site':
+      return {
+        label: 'Shop on Brand Site',
+        className: 'bg-[#d94d82] text-white hover:bg-[#bf3b6f]',
+      }
+    default:
+      return {
+        label: 'Search on Olive Young',
+        className: 'bg-[#eef2f7] text-[#516074] hover:bg-[#dfe6ef]',
+      }
+  }
 }
 
 export default function PersonalColorPage() {
@@ -321,12 +344,12 @@ export default function PersonalColorPage() {
                     </div>
                     <p className="mt-3 text-sm leading-6 text-[var(--muted)] line-clamp-1">{product.reason}</p>
                     <a
-                      href={buildOliveYoungSearchUrl(product.brand, product.name)}
+                      href={product.product_url || buildOliveYoungSearchUrl(product.brand, product.name)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="brand-button-secondary mt-5 inline-flex px-5 py-3 text-center font-semibold"
+                      className={`mt-5 inline-flex rounded-full px-5 py-3 text-center text-sm font-semibold transition-colors ${getProductButtonMeta(product.link_type).className}`}
                     >
-                      Search on Olive Young
+                      {getProductButtonMeta(product.link_type).label}
                     </a>
                   </div>
                 ))}
