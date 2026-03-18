@@ -13,6 +13,8 @@ const CATEGORY_KO: Record<string, string> = {
   선케어: 'Suncare',
 }
 
+const GLOBAL_OLIVEYOUNG_HOME_URL = 'https://global.oliveyoung.com/'
+
 type Product = {
   id: string
   name: string
@@ -27,6 +29,7 @@ type Product = {
   explanation?: string
   display_affiliate_url?: string | null
   display_link_region?: Region
+  display_button_label?: string
 }
 
 type Region = ShoppingRegion
@@ -112,15 +115,36 @@ export default function RecommendPage() {
         }
 
         const regionAwareProducts = ((data.products ?? []) as Product[])
-          .map(product => ({
-            ...product,
-            display_affiliate_url:
-              region === 'korea' ? product.affiliate_url : product.global_affiliate_url,
-            display_link_region: region,
-          }))
-          .filter(product =>
-            region === 'global' ? Boolean(product.global_affiliate_url) : Boolean(product.affiliate_url)
-          )
+          .map(product => {
+            if (region === 'global') {
+              return {
+                ...product,
+                display_affiliate_url: product.global_affiliate_url ?? GLOBAL_OLIVEYOUNG_HOME_URL,
+                display_link_region: 'global' as const,
+                display_button_label: product.global_affiliate_url
+                  ? 'Shop on Olive Young Global'
+                  : 'Search on Olive Young Global',
+              }
+            }
+
+            return {
+              ...product,
+              display_affiliate_url: product.affiliate_url,
+              display_link_region: 'korea' as const,
+              display_button_label: 'Shop on Olive Young Korea',
+            }
+          })
+          .filter(product => Boolean(product.display_affiliate_url))
+          .sort((left, right) => {
+            if (region !== 'global') {
+              return 0
+            }
+
+            const leftPriority = left.global_affiliate_url ? 1 : 0
+            const rightPriority = right.global_affiliate_url ? 1 : 0
+
+            return rightPriority - leftPriority
+          })
 
         const productsWithExplanation = await Promise.all(
           regionAwareProducts.map(async product => {
@@ -312,9 +336,7 @@ export default function RecommendPage() {
                         rel="noopener noreferrer"
                         className="brand-button-primary mt-4 block w-full px-5 py-3 text-center font-semibold"
                       >
-                        {product.display_link_region === 'korea'
-                          ? 'Shop on Olive Young Korea'
-                          : 'Shop on Olive Young Global'}
+                        {product.display_button_label}
                       </a>
                     )}
                   </div>
