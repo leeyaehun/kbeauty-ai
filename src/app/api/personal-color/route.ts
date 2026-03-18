@@ -1,0 +1,185 @@
+import { NextRequest, NextResponse } from 'next/server'
+import OpenAI from 'openai'
+
+import { createServerSupabaseClient } from '@/lib/supabase'
+
+type PersonalColorResult = {
+  season: 'spring_warm' | 'summer_cool' | 'autumn_warm' | 'winter_cool'
+  tone: 'warm' | 'cool'
+  description: string
+  characteristics: string[]
+  best_colors: string[]
+  avoid_colors: string[]
+  makeup_recommendations: {
+    foundation: string
+    lip: string
+    blush: string
+    eyeshadow: string
+  }
+  celebrity_examples: string[]
+}
+
+function getOpenAIClient() {
+  const apiKey = process.env.OPENAI_API_KEY
+
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY is not configured')
+  }
+
+  return new OpenAI({ apiKey })
+}
+
+function extractMessageText(content: unknown) {
+  if (typeof content === 'string') {
+    return content
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .filter((item) => item && typeof item === 'object' && 'type' in item && item.type === 'text')
+      .map((item) => ('text' in item && typeof item.text === 'string' ? item.text : ''))
+      .join('\n')
+  }
+
+  return ''
+}
+
+function normalizeStringList(value: unknown, limit = 6) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string').slice(0, limit)
+    : []
+}
+
+function normalizeSeason(value: unknown): PersonalColorResult['season'] {
+  const normalized = typeof value === 'string' ? value.toLowerCase().trim() : ''
+
+  switch (normalized) {
+    case 'spring_warm':
+    case 'summer_cool':
+    case 'autumn_warm':
+    case 'winter_cool':
+      return normalized
+    default:
+      return 'spring_warm'
+  }
+}
+
+function normalizeTone(value: unknown, season: PersonalColorResult['season']): PersonalColorResult['tone'] {
+  if (value === 'warm' || value === 'cool') {
+    return value
+  }
+
+  return season.includes('warm') ? 'warm' : 'cool'
+}
+
+function normalizePersonalColorResult(parsed: any): PersonalColorResult {
+  const season = normalizeSeason(parsed?.season)
+
+  return {
+    season,
+    tone: normalizeTone(parsed?.tone, season),
+    description: typeof parsed?.description === 'string'
+      ? parsed.description
+      : 'Your coloring appears balanced with a naturally harmonious palette.',
+    characteristics: normalizeStringList(parsed?.characteristics),
+    best_colors: normalizeStringList(parsed?.best_colors),
+    avoid_colors: normalizeStringList(parsed?.avoid_colors),
+    makeup_recommendations: {
+      foundation: typeof parsed?.makeup_recommendations?.foundation === 'string'
+        ? parsed.makeup_recommendations.foundation
+        : 'Choose a base that matches your undertone.',
+      lip: typeof parsed?.makeup_recommendations?.lip === 'string'
+        ? parsed.makeup_recommendations.lip
+        : 'Pick lip colors that echo your seasonal warmth or coolness.',
+      blush: typeof parsed?.makeup_recommendations?.blush === 'string'
+        ? parsed.makeup_recommendations.blush
+        : 'Use blush shades that keep your complexion lively and balanced.',
+      eyeshadow: typeof parsed?.makeup_recommendations?.eyeshadow === 'string'
+        ? parsed.makeup_recommendations.eyeshadow
+        : 'Softly define the eyes with tones that match your seasonal palette.',
+    },
+    celebrity_examples: normalizeStringList(parsed?.celebrity_examples),
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: 'Please sign in to use personal color analysis.' }, { status: 401 })
+    }
+
+    const { data: userPlan } = await supabase
+      .from('user_plans')
+      .select('plan')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (userPlan?.plan !== 'pro') {
+      return NextResponse.json({ error: 'Personal color analysis is a Pro feature.' }, { status: 403 })
+    }
+
+    const { imageBase64 } = await req.json()
+
+    if (!imageBase64) {
+      return NextResponse.json({ error: 'No image was provided.' }, { status: 400 })
+    }
+
+    const openai = getOpenAIClient()
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a professional personal color analyst. Analyze the skin undertone, eye color, and hair color in the image to determine the seasonal color type (Spring Warm, Summer Cool, Autumn Warm, Winter Cool). Return ONLY JSON.'
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: {
+                url: imageBase64,
+                detail: 'high',
+              },
+            },
+            {
+              type: 'text',
+              text: `Return JSON with this exact structure:
+{
+  "season": "spring_warm | summer_cool | autumn_warm | winter_cool",
+  "tone": "warm | cool",
+  "description": "short paragraph",
+  "characteristics": ["item"],
+  "best_colors": ["item"],
+  "avoid_colors": ["item"],
+  "makeup_recommendations": {
+    "foundation": "text",
+    "lip": "text",
+    "blush": "text",
+    "eyeshadow": "text"
+  },
+  "celebrity_examples": ["item"]
+}`
+            }
+          ],
+        }
+      ],
+    })
+
+    const rawText = extractMessageText(response.choices[0]?.message?.content)
+    const parsed = JSON.parse(rawText)
+
+    return NextResponse.json(normalizePersonalColorResult(parsed))
+  } catch (error: any) {
+    console.error('Personal color analysis error:', error)
+    return NextResponse.json(
+      { error: error?.message || 'An unexpected error happened during personal color analysis.' },
+      { status: 500 }
+    )
+  }
+}

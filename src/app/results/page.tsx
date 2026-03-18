@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+import UpgradeModal from '@/components/UpgradeModal'
+
 const ANALYZE_TIMEOUT_MS = 30_000
 const ANALYZE_MAX_RETRIES = 1
 
@@ -124,6 +126,8 @@ export default function ResultsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [isSignedIn, setIsSignedIn] = useState(false)
+  const [isProUser, setIsProUser] = useState(false)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   useEffect(() => {
     async function analyze() {
@@ -148,8 +152,17 @@ export default function ResultsPage() {
           const { data: { user } } = await supabase.auth.getUser()
 
           setIsSignedIn(Boolean(user))
+          setIsProUser(false)
 
           if (user) {
+            const { data: userPlan } = await supabase
+              .from('user_plans')
+              .select('plan')
+              .eq('user_id', user.id)
+              .maybeSingle()
+
+            setIsProUser(userPlan?.plan === 'pro')
+
             await supabase.from('analyses').insert({
               user_id: user.id,
               skin_type: data.skin_type,
@@ -214,6 +227,11 @@ export default function ResultsPage() {
 
   return (
     <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
+      <UpgradeModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+      />
+
       <div className="brand-shell">
         <div className="mb-8 flex justify-center md:justify-start">
           <div className="brand-mark">K-Beauty AI</div>
@@ -304,6 +322,23 @@ export default function ResultsPage() {
                   className="brand-button-primary w-full py-4 font-semibold"
                 >
                   Personalized Product Recommendations
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (isProUser) {
+                      router.push('/personal-color')
+                      return
+                    }
+
+                    setShowUpgradeModal(true)
+                  }}
+                  className="brand-button-secondary w-full py-4 font-semibold"
+                >
+                  Discover Your Personal Color ✨
+                  <span className="ml-2 rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">
+                    Pro
+                  </span>
                 </button>
 
                 {isSignedIn ? (
