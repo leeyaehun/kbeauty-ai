@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import UpgradeModal from '@/components/UpgradeModal'
@@ -8,6 +8,20 @@ import UpgradeModal from '@/components/UpgradeModal'
 type ColorSwatch = {
   name: string
   hex: string
+}
+
+type MakeupCategoryKey = 'foundation' | 'lip' | 'blush' | 'eyeshadow'
+
+type MakeupProduct = {
+  brand: string
+  name: string
+  reason: string
+  shade: string
+}
+
+type MakeupProductSection = {
+  tip: string
+  products: MakeupProduct[]
 }
 
 type PersonalColorResult = {
@@ -24,6 +38,7 @@ type PersonalColorResult = {
     eyeshadow: string
   }
   celebrity_examples: string[]
+  product_recommendations: Record<MakeupCategoryKey, MakeupProductSection>
 }
 
 const SEASON_LABELS: Record<PersonalColorResult['season'], { title: string, className: string }> = {
@@ -45,6 +60,19 @@ const SEASON_LABELS: Record<PersonalColorResult['season'], { title: string, clas
   },
 }
 
+const MAKEUP_TABS: Array<{ key: MakeupCategoryKey, label: string }> = [
+  { key: 'foundation', label: 'Foundation' },
+  { key: 'lip', label: 'Lip' },
+  { key: 'blush', label: 'Blush' },
+  { key: 'eyeshadow', label: 'Eyeshadow' },
+]
+
+function buildOliveYoungSearchUrl(brand: string, name: string) {
+  const url = new URL('https://global.oliveyoung.com/search')
+  url.searchParams.set('query', `${brand} ${name}`.trim())
+  return url.toString()
+}
+
 export default function PersonalColorPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -52,6 +80,7 @@ export default function PersonalColorPage() {
   const [result, setResult] = useState<PersonalColorResult | null>(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [paramsReady, setParamsReady] = useState(false)
+  const [activeTab, setActiveTab] = useState<MakeupCategoryKey>('foundation')
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search)
@@ -102,6 +131,10 @@ export default function PersonalColorPage() {
   }, [paramsReady, router, showUpgrade])
 
   const seasonMeta = result ? SEASON_LABELS[result.season] : null
+  const activeRecommendation = useMemo(
+    () => (result ? result.product_recommendations[activeTab] : null),
+    [activeTab, result]
+  )
 
   if (loading) {
     return (
@@ -148,7 +181,7 @@ export default function PersonalColorPage() {
     )
   }
 
-  if (!result || !seasonMeta) {
+  if (!result || !seasonMeta || !activeRecommendation) {
     return null
   }
 
@@ -254,25 +287,52 @@ export default function PersonalColorPage() {
               <div className="border-b border-[rgba(148,163,184,0.18)] pb-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Makeup recommendations</p>
               </div>
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-[24px] bg-[#fff0f5] p-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">Foundation</p>
-                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{result.makeup_recommendations.foundation}</p>
-                </div>
-                <div className="rounded-[24px] bg-white p-5 shadow-[0_14px_24px_rgba(149,64,109,0.08)]">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">Lip</p>
-                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{result.makeup_recommendations.lip}</p>
-                </div>
-                <div className="rounded-[24px] bg-white p-5 shadow-[0_14px_24px_rgba(149,64,109,0.08)]">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">Blush</p>
-                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{result.makeup_recommendations.blush}</p>
-                </div>
-                <div className="rounded-[24px] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(246,222,177,0.45))] p-5 shadow-[0_14px_24px_rgba(149,64,109,0.08)]">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#c89b3c]">Eyeshadow</p>
-                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{result.makeup_recommendations.eyeshadow}</p>
-                </div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {MAKEUP_TABS.map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                      activeTab === tab.key
+                        ? 'bg-[#d94d82] text-white shadow-[0_12px_24px_rgba(217,77,130,0.22)]'
+                        : 'border border-[rgba(255,107,157,0.16)] bg-white text-[#d94d82]'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-5 rounded-[24px] border border-[rgba(255,107,157,0.12)] bg-[#fff6fa] p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">Tip</p>
+                <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{activeRecommendation.tip}</p>
+              </div>
+
+              <div className="mt-5 grid gap-4">
+                {activeRecommendation.products.map((product) => (
+                  <div
+                    key={`${activeTab}-${product.brand}-${product.name}-${product.shade}`}
+                    className="rounded-[24px] border border-[rgba(255,107,157,0.16)] bg-white p-5 shadow-[0_14px_24px_rgba(149,64,109,0.08)]"
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">{product.brand}</p>
+                    <h3 className="mt-2 text-lg font-semibold tracking-[-0.03em] text-[var(--ink)]">{product.name}</h3>
+                    <div className="mt-3 inline-flex rounded-full bg-[#fff0f5] px-3 py-1 text-xs font-semibold text-[#b83b73]">
+                      {product.shade}
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[var(--muted)] line-clamp-1">{product.reason}</p>
+                    <a
+                      href={buildOliveYoungSearchUrl(product.brand, product.name)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="brand-button-secondary mt-5 inline-flex px-5 py-3 text-center font-semibold"
+                    >
+                      Search on Olive Young
+                    </a>
+                  </div>
+                ))}
               </div>
             </div>
+
           </section>
         </div>
       </div>
