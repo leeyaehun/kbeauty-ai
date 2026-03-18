@@ -36,9 +36,10 @@ const envPath = path.resolve(__dirname, '../../.env.local')
 loadEnv({ path: envPath })
 
 let openai: OpenAI | null = null
-let supabase:
-  | ReturnType<typeof createClient>
-  | null = null
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 function getOpenAI() {
   if (!process.env.OPENAI_API_KEY) {
@@ -52,21 +53,6 @@ function getOpenAI() {
   }
 
   return openai
-}
-
-function getSupabase() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error(`Supabase env vars are missing. Check ${envPath}.`)
-  }
-
-  if (!supabase) {
-    supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    )
-  }
-
-  return supabase
 }
 
 async function generateEmbedding(text: string) {
@@ -100,7 +86,7 @@ async function buildSkinProfile(ingredientNames: string[]) {
     return null
   }
 
-  const { data: ingredients } = await getSupabase()
+  const { data: ingredients } = await supabase
     .from('ingredients')
     .select('skin_dry, skin_oily, skin_combination, skin_sensitive, skin_normal')
     .in('name_ko', ingredientNames)
@@ -130,7 +116,7 @@ async function buildSkinProfile(ingredientNames: string[]) {
 export async function embedMissingProducts() {
   console.log('제품 임베딩 생성 시작...')
 
-  const { data: products, error } = await getSupabase()
+  const { data: products, error } = await supabase
     .from('products')
     .select('id, name, brand, category, ingredient_names, skin_profile')
     .is('embedding', null)
@@ -155,7 +141,7 @@ export async function embedMissingProducts() {
       })
       const embedding = await generateEmbedding(text)
 
-      const { error: updateError } = await getSupabase()
+      const { error: updateError } = await supabase
         .from('products')
         .update({
           embedding,
