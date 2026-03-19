@@ -13,18 +13,45 @@ export type PersonalColorSwatch = {
   hex: string
 }
 
+export type PersonalColorSeason = 'spring_warm' | 'summer_cool' | 'autumn_warm' | 'winter_cool'
+
+export const SEASON_COLORS: Record<PersonalColorSeason, string[]> = {
+  autumn_warm: [
+    '#8B4513', '#A0522D', '#CD853F', '#D2691E', '#B8860B',
+    '#DAA520', '#808000', '#556B2F', '#6B8E23', '#8FBC8F',
+    '#BDB76B', '#F4A460', '#DEB887', '#D2B48C', '#BC8F8F',
+    '#C19A6B', '#A0785A', '#8B7355', '#996633', '#CC7722',
+  ],
+  spring_warm: [
+    '#FF6B6B', '#FF8E53', '#FFAB76', '#FFD700', '#FFF176',
+    '#C8E6C9', '#A5D6A7', '#FFB347', '#FF7043', '#FFCC02',
+    '#F4A460', '#DEB887', '#CD853F', '#FFA07A', '#FA8072',
+    '#FF6347', '#FF4500', '#FFD700', '#FFDAB9', '#FFEAA7',
+  ],
+  summer_cool: [
+    '#B39DDB', '#9575CD', '#CE93D8', '#F48FB1', '#F06292',
+    '#80DEEA', '#4DD0E1', '#80CBC4', '#A5D6A7', '#C5CAE9',
+    '#7986CB', '#64B5F6', '#4FC3F7', '#E1BEE7', '#D1C4E9',
+    '#F8BBD0', '#FCE4EC', '#EDE7F6', '#E3F2FD', '#B2EBF2',
+  ],
+  winter_cool: [
+    '#1A1A2E', '#16213E', '#0F3460', '#533483', '#E94560',
+    '#00B4D8', '#0077B6', '#023E8A', '#6A0572', '#9B2226',
+    '#AE2012', '#BB3E03', '#CA6702', '#FFFFFF', '#F8F9FA',
+    '#E9ECEF', '#DEE2E6', '#000000', '#212529', '#495057',
+  ],
+}
+
 export type PersonalColorCanvasHandle = {
   exportImage: () => string | null
 }
 
 type PersonalColorCanvasProps = {
+  avoidColors: PersonalColorSwatch[]
   backgroundHex: string
   bestColors: PersonalColorSwatch[]
   imageData: string
-  onSelectColor: (swatch: PersonalColorSwatch) => void
-  selectedHex: string | null
-  seasonLabel: string
-  avoidColors: PersonalColorSwatch[]
+  season: PersonalColorSeason
 }
 
 type CropFocus = {
@@ -33,22 +60,17 @@ type CropFocus = {
   radius: number
 }
 
-type PatchLayout = {
-  color: PersonalColorSwatch
-  x: number
-  y: number
-  radius: number
-  labelY: number
+type WheelSlice = {
+  hex: string
+  isAvoid: boolean
 }
-
-const CANVAS_ASPECT_RATIO = 1.12
-const PATCH_RADIUS = 25
-const LABEL_FONT = '500 12px "Avenir Next", "Avenir", "Noto Sans KR", sans-serif'
-const TITLE_FONT = '700 14px "Avenir Next", "Avenir", "Noto Sans KR", sans-serif'
-const BODY_FONT = '500 13px "Avenir Next", "Avenir", "Noto Sans KR", sans-serif'
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function easeOutCubic(value: number) {
+  return 1 - Math.pow(1 - value, 3)
 }
 
 function hexToRgb(hex: string) {
@@ -58,20 +80,20 @@ function hexToRgb(hex: string) {
     return null
   }
 
-  const value = Number.parseInt(normalized, 16)
+  const numeric = Number.parseInt(normalized, 16)
 
-  if (Number.isNaN(value)) {
+  if (Number.isNaN(numeric)) {
     return null
   }
 
   return {
-    r: (value >> 16) & 255,
-    g: (value >> 8) & 255,
-    b: value & 255,
+    b: numeric & 255,
+    g: (numeric >> 8) & 255,
+    r: (numeric >> 16) & 255,
   }
 }
 
-function mixWithWhite(hex: string, weight: number) {
+function mixHexWithWhite(hex: string, weight: number) {
   const rgb = hexToRgb(hex)
 
   if (!rgb) {
@@ -86,31 +108,17 @@ function mixWithWhite(hex: string, weight: number) {
   return `rgb(${r}, ${g}, ${b})`
 }
 
-function drawRoundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number
-) {
-  const safeRadius = Math.min(radius, width / 2, height / 2)
+function toGrayscale(hex: string) {
+  const rgb = hexToRgb(hex)
 
-  ctx.beginPath()
-  ctx.moveTo(x + safeRadius, y)
-  ctx.lineTo(x + width - safeRadius, y)
-  ctx.quadraticCurveTo(x + width, y, x + width, y + safeRadius)
-  ctx.lineTo(x + width, y + height - safeRadius)
-  ctx.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height)
-  ctx.lineTo(x + safeRadius, y + height)
-  ctx.quadraticCurveTo(x, y + height, x, y + height - safeRadius)
-  ctx.lineTo(x, y + safeRadius)
-  ctx.quadraticCurveTo(x, y, x + safeRadius, y)
-  ctx.closePath()
-}
+  if (!rgb) {
+    return '#9CA3AF'
+  }
 
-function easeOutCubic(value: number) {
-  return 1 - Math.pow(1 - value, 3)
+  const luminance = Math.round(rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114)
+  const softened = Math.round(luminance * 0.78 + 36)
+
+  return `rgb(${softened}, ${softened}, ${softened})`
 }
 
 function createDefaultCrop(image: HTMLImageElement): CropFocus {
@@ -170,66 +178,68 @@ async function detectFaceCrop(image: HTMLImageElement): Promise<CropFocus> {
       sumY += y
     }
 
-    const centerX = sumX / points.length
-    const centerY = sumY / points.length
-    const width = maxX - minX
-    const height = maxY - minY
-
     return {
-      centerX,
-      centerY,
-      radius: Math.max(width, height) * 0.52,
+      centerX: sumX / points.length,
+      centerY: sumY / points.length,
+      radius: Math.max(maxX - minX, maxY - minY) * 0.52,
     }
   } catch {
     return fallback
   }
 }
 
-function getPatchLayouts(
-  width: number,
-  height: number,
-  colors: PersonalColorSwatch[]
-): PatchLayout[] {
-  const featured = colors.slice(0, 8)
-  const centerX = width / 2
-  const centerY = height * 0.38
-  const orbitRadius = Math.min(width, height) * 0.34
-  const startAngle = -Math.PI / 2
+function uniqueHexes(hexes: string[]) {
+  return [...new Set(hexes.filter(Boolean).map((hex) => hex.toUpperCase()))]
+}
 
-  return featured.map((color, index) => {
-    const angle = startAngle + (Math.PI * 2 * index) / featured.length
-    const x = centerX + Math.cos(angle) * orbitRadius
-    const y = centerY + Math.sin(angle) * orbitRadius * 0.88
+function buildWheelSlices(
+  season: PersonalColorSeason,
+  bestColors: PersonalColorSwatch[],
+  avoidColors: PersonalColorSwatch[]
+): WheelSlice[] {
+  const preferredHexes = uniqueHexes([
+    ...bestColors.map((color) => color.hex),
+    ...SEASON_COLORS[season],
+  ]).slice(0, 20)
+  const avoidHexes = uniqueHexes(avoidColors.map((color) => color.hex)).slice(0, 4)
+  const slices: WheelSlice[] = preferredHexes.map((hex) => ({ hex, isAvoid: false }))
 
-    return {
-      color,
-      labelY: y + PATCH_RADIUS + 20,
-      radius: PATCH_RADIUS,
-      x,
-      y,
-    }
-  })
+  if (avoidHexes.length === 0) {
+    return slices
+  }
+
+  for (let index = 0; index < avoidHexes.length; index += 1) {
+    const insertAt = Math.min(
+      slices.length,
+      Math.round(((preferredHexes.length + index) / avoidHexes.length) * (index + 1))
+    )
+
+    slices.splice(insertAt, 0, {
+      hex: avoidHexes[index],
+      isAvoid: true,
+    })
+  }
+
+  return slices
 }
 
 const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorCanvasProps>(
   function PersonalColorCanvas(
     {
+      avoidColors,
       backgroundHex,
       bestColors,
       imageData,
-      onSelectColor,
-      selectedHex,
-      seasonLabel,
-      avoidColors,
+      season,
     },
     ref
   ) {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
-    const imageRef = useRef<HTMLImageElement | null>(null)
     const cropRef = useRef<CropFocus | null>(null)
+    const imageRef = useRef<HTMLImageElement | null>(null)
     const hasAnimatedRef = useRef(false)
-    const [canvasWidth, setCanvasWidth] = useState(0)
+    const [canvasSize, setCanvasSize] = useState(0)
     const [imageReady, setImageReady] = useState(false)
 
     useImperativeHandle(ref, () => ({
@@ -243,7 +253,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
 
       const observer = new ResizeObserver((entries) => {
         const nextWidth = entries[0]?.contentRect.width ?? 0
-        setCanvasWidth(Math.max(320, Math.round(nextWidth)))
+        setCanvasSize(Math.max(280, Math.round(nextWidth)))
       })
 
       observer.observe(containerRef.current)
@@ -253,6 +263,8 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
 
     useEffect(() => {
       let isActive = true
+      setImageReady(false)
+
       const image = new Image()
 
       image.onload = async () => {
@@ -281,7 +293,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       const image = imageRef.current
       const crop = cropRef.current
 
-      if (!canvas || !image || !crop || !canvasWidth || !imageReady) {
+      if (!canvas || !image || !crop || !canvasSize || !imageReady) {
         return
       }
 
@@ -292,57 +304,67 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       }
 
       const dpr = window.devicePixelRatio || 1
-      const width = canvasWidth
-      const height = Math.round(width * CANVAS_ASPECT_RATIO)
+      const size = canvasSize
+      const slices = buildWheelSlices(season, bestColors, avoidColors)
 
-      canvas.width = Math.round(width * dpr)
-      canvas.height = Math.round(height * dpr)
-      canvas.style.width = `${width}px`
-      canvas.style.height = `${height}px`
+      canvas.width = Math.round(size * dpr)
+      canvas.height = Math.round(size * dpr)
+      canvas.style.width = `${size}px`
+      canvas.style.height = `${size}px`
       context.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-      const patchLayouts = getPatchLayouts(width, height, bestColors)
-      const avoidLayouts = avoidColors.slice(0, 4)
+      const centerX = size / 2
+      const centerY = size / 2
+      const outerRadius = size * 0.48
+      const faceRadius = size * 0.22
+      const totalSlices = slices.length
+      const sliceAngle = (Math.PI * 2) / totalSlices
       let animationFrameId = 0
 
       const draw = (elapsedMs: number) => {
-        context.clearRect(0, 0, width, height)
+        context.clearRect(0, 0, size, size)
 
-        const panelFill = context.createLinearGradient(0, 0, width, height)
-        panelFill.addColorStop(0, mixWithWhite(backgroundHex, 0.12))
-        panelFill.addColorStop(1, mixWithWhite(backgroundHex, 0.52))
-        drawRoundedRect(context, 0, 0, width, height, 32)
-        context.fillStyle = panelFill
-        context.fill()
+        const background = context.createLinearGradient(0, 0, size, size)
+        background.addColorStop(0, mixHexWithWhite(backgroundHex, 0.14))
+        background.addColorStop(1, mixHexWithWhite(backgroundHex, 0.54))
+        context.fillStyle = background
+        context.fillRect(0, 0, size, size)
 
-        const glow = context.createRadialGradient(width / 2, height * 0.28, 40, width / 2, height * 0.28, width * 0.46)
-        glow.addColorStop(0, 'rgba(255,255,255,0.95)')
+        const glow = context.createRadialGradient(centerX, centerY, faceRadius * 0.8, centerX, centerY, outerRadius)
+        glow.addColorStop(0, 'rgba(255,255,255,0.12)')
         glow.addColorStop(1, 'rgba(255,255,255,0)')
         context.fillStyle = glow
-        context.fillRect(0, 0, width, height)
+        context.fillRect(0, 0, size, size)
 
-        context.fillStyle = 'rgba(45,27,47,0.64)'
-        context.font = TITLE_FONT
-        context.letterSpacing = '0.18em'
-        context.fillText(seasonLabel, 26, 34)
+        const animationProgress = clamp(elapsedMs / 1000, 0, 1)
+        const radiusProgress = easeOutCubic(animationProgress)
+        const activeRadius = faceRadius + (outerRadius - faceRadius) * radiusProgress
 
-        context.font = BODY_FONT
-        context.fillStyle = 'rgba(45,27,47,0.72)'
-        context.fillText('Your most flattering shades orbit your portrait.', 26, 56)
+        for (let index = 0; index < totalSlices; index += 1) {
+          const slice = slices[index]
+          const startAngle = index * sliceAngle - Math.PI / 2
+          const endAngle = startAngle + sliceAngle
 
-        const faceCenterX = width / 2
-        const faceCenterY = height * 0.38
-        const faceRadius = Math.min(width, height) * 0.18
+          context.beginPath()
+          context.moveTo(centerX, centerY)
+          context.arc(centerX, centerY, activeRadius, startAngle, endAngle)
+          context.closePath()
+          context.fillStyle = slice.isAvoid ? toGrayscale(slice.hex) : slice.hex
+          context.fill()
+          context.strokeStyle = 'rgba(255,255,255,0.92)'
+          context.lineWidth = 2
+          context.stroke()
+        }
 
         context.save()
         context.beginPath()
-        context.arc(faceCenterX, faceCenterY, faceRadius, 0, Math.PI * 2)
+        context.arc(centerX, centerY, faceRadius, 0, Math.PI * 2)
         context.closePath()
         context.clip()
 
-        const sourceSize = crop.radius * 2.4
-        const sourceX = clamp(crop.centerX - sourceSize / 2, 0, image.naturalWidth - sourceSize)
-        const sourceY = clamp(crop.centerY - sourceSize / 2, 0, image.naturalHeight - sourceSize)
+        const sourceSize = Math.min(Math.min(image.naturalWidth, image.naturalHeight), crop.radius * 2.45)
+        const sourceX = clamp(crop.centerX - sourceSize / 2, 0, Math.max(0, image.naturalWidth - sourceSize))
+        const sourceY = clamp(crop.centerY - sourceSize / 2, 0, Math.max(0, image.naturalHeight - sourceSize))
 
         context.drawImage(
           image,
@@ -350,115 +372,34 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
           sourceY,
           sourceSize,
           sourceSize,
-          faceCenterX - faceRadius,
-          faceCenterY - faceRadius,
+          centerX - faceRadius,
+          centerY - faceRadius,
           faceRadius * 2,
           faceRadius * 2
         )
         context.restore()
 
-        context.lineWidth = 8
-        context.strokeStyle = 'rgba(255,255,255,0.92)'
+        context.strokeStyle = 'rgba(255,255,255,0.96)'
+        context.lineWidth = 6
         context.beginPath()
-        context.arc(faceCenterX, faceCenterY, faceRadius + 4, 0, Math.PI * 2)
+        context.arc(centerX, centerY, faceRadius + 3, 0, Math.PI * 2)
         context.stroke()
 
-        context.lineWidth = 1
-        context.strokeStyle = 'rgba(255,255,255,0.34)'
-        context.beginPath()
-        context.arc(faceCenterX, faceCenterY, faceRadius + 54, 0, Math.PI * 2)
-        context.stroke()
-
-        context.beginPath()
-        context.arc(faceCenterX, faceCenterY, faceRadius + 104, 0, Math.PI * 2)
         context.strokeStyle = 'rgba(45,27,47,0.06)'
+        context.lineWidth = 1
+        context.beginPath()
+        context.arc(centerX, centerY, outerRadius - 2, 0, Math.PI * 2)
         context.stroke()
 
-        patchLayouts.forEach((patch, index) => {
-          const delay = index * 100
-          const duration = 650
-          const rawProgress = clamp((elapsedMs - delay) / duration, 0, 1)
-          const progress = easeOutCubic(rawProgress)
-          const startX = faceCenterX
-          const startY = faceCenterY
-          const x = startX + (patch.x - startX) * progress
-          const y = startY + (patch.y - startY) * progress
-          const scale = 0.35 + progress * 0.65
-
-          context.save()
-          context.globalAlpha = rawProgress
-          context.translate(x, y)
-          context.scale(scale, scale)
-
-          context.shadowBlur = 26
-          context.shadowColor = 'rgba(45,27,47,0.18)'
-          context.fillStyle = patch.color.hex
-          context.beginPath()
-          context.arc(0, 0, patch.radius, 0, Math.PI * 2)
-          context.fill()
-
-          if (selectedHex === patch.color.hex) {
-            context.lineWidth = 4
-            context.strokeStyle = '#ffffff'
-            context.stroke()
-          }
-
-          context.restore()
-
-          context.save()
-          context.globalAlpha = rawProgress
-          context.textAlign = 'center'
-          context.font = LABEL_FONT
-          context.fillStyle = 'rgba(45,27,47,0.72)'
-          context.fillText(patch.color.name, x, y + patch.radius + 18)
-          context.restore()
-        })
-
-        const avoidTrayY = height - 142
-        drawRoundedRect(context, 20, avoidTrayY, width - 40, 104, 28)
-        context.fillStyle = 'rgba(104,116,139,0.12)'
-        context.fill()
-        context.strokeStyle = 'rgba(104,116,139,0.14)'
-        context.stroke()
-
-        context.font = TITLE_FONT
-        context.fillStyle = 'rgba(79,94,113,0.84)'
-        context.textAlign = 'left'
-        context.fillText('Colors to avoid', 40, avoidTrayY + 24)
-
-        avoidLayouts.forEach((color, index) => {
-          const spacing = (width - 110) / Math.max(avoidLayouts.length - 1, 1)
-          const x = 56 + index * spacing
-          const y = avoidTrayY + 62
-
-          context.fillStyle = color.hex
-          context.beginPath()
-          context.arc(x, y, 18, 0, Math.PI * 2)
-          context.fill()
-
-          context.lineWidth = 2
-          context.strokeStyle = 'rgba(255,255,255,0.8)'
-          context.beginPath()
-          context.arc(x, y, 18, 0, Math.PI * 2)
-          context.stroke()
-
-          context.strokeStyle = 'rgba(79,94,113,0.72)'
-          context.lineWidth = 2.5
-          context.beginPath()
-          context.moveTo(x - 10, y - 10)
-          context.lineTo(x + 10, y + 10)
-          context.moveTo(x + 10, y - 10)
-          context.lineTo(x - 10, y + 10)
-          context.stroke()
-        })
-
-        context.textAlign = 'left'
-        context.font = '700 11px "Avenir Next", "Avenir", "Noto Sans KR", sans-serif'
+        context.fillStyle = 'rgba(255,255,255,0.88)'
+        context.fillRect(0, size - 24, size, 24)
         context.fillStyle = 'rgba(45,27,47,0.72)'
-        context.fillText('K-BEAUTY AI', 26, height - 16)
+        context.font = '700 11px "Avenir Next", "Avenir", "Noto Sans KR", sans-serif'
+        context.textAlign = 'left'
+        context.fillText('K-BEAUTY AI', 12, size - 8)
         context.textAlign = 'right'
         context.fillStyle = 'rgba(79,94,113,0.82)'
-        context.fillText('kbeauty-ai.vercel.app', width - 26, height - 16)
+        context.fillText('kbeauty-ai.vercel.app', size - 12, size - 8)
       }
 
       if (hasAnimatedRef.current) {
@@ -472,7 +413,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
         const elapsed = now - startAt
         draw(elapsed)
 
-        if (elapsed < 1800) {
+        if (elapsed < 1000) {
           animationFrameId = window.requestAnimationFrame(animate)
           return
         }
@@ -484,33 +425,13 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       animationFrameId = window.requestAnimationFrame(animate)
 
       return () => window.cancelAnimationFrame(animationFrameId)
-    }, [avoidColors, backgroundHex, bestColors, canvasWidth, imageReady, seasonLabel, selectedHex])
-
-    function handleCanvasClick(event: React.MouseEvent<HTMLCanvasElement>) {
-      if (!canvasRef.current || !canvasWidth) {
-        return
-      }
-
-      const rect = canvasRef.current.getBoundingClientRect()
-      const scaleX = canvasWidth / rect.width
-      const scaleY = Math.round(canvasWidth * CANVAS_ASPECT_RATIO) / rect.height
-      const x = (event.clientX - rect.left) * scaleX
-      const y = (event.clientY - rect.top) * scaleY
-
-      const patch = getPatchLayouts(canvasWidth, Math.round(canvasWidth * CANVAS_ASPECT_RATIO), bestColors)
-        .find((layout) => Math.hypot(layout.x - x, layout.y - y) <= layout.radius)
-
-      if (patch) {
-        onSelectColor(patch.color)
-      }
-    }
+    }, [avoidColors, backgroundHex, bestColors, canvasSize, imageReady, season])
 
     return (
-      <div ref={containerRef} className="w-full">
+      <div ref={containerRef} className="mx-auto w-[90vw] max-w-[720px]">
         <canvas
           ref={canvasRef}
-          onClick={handleCanvasClick}
-          className="w-full cursor-pointer rounded-[32px] shadow-[0_28px_60px_rgba(45,27,47,0.16)]"
+          className="aspect-square w-full rounded-[28px] shadow-[0_28px_70px_rgba(45,27,47,0.18)]"
         />
       </div>
     )
