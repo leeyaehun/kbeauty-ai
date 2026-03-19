@@ -89,7 +89,7 @@ const MAKEUP_TABS: Array<{ key: MakeupCategoryKey, label: string }> = [
 ]
 
 function buildOliveYoungSearchUrl(brand: string, name: string) {
-  const url = new URL('https://global.oliveyoung.com/search')
+  const url = new URL('https://global.oliveyoung.com/display/search')
   url.searchParams.set('query', `${brand} ${name}`.trim())
   return url.toString()
 }

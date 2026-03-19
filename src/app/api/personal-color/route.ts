@@ -180,8 +180,14 @@ function normalizeForMatch(value: string) {
     .trim()
 }
 
+function matchTokens(value: string) {
+  return normalizeForMatch(value)
+    .split(' ')
+    .filter((token) => token.length >= 3)
+}
+
 function buildOliveYoungSearchUrl(brand: string, productName: string) {
-  const url = new URL('https://global.oliveyoung.com/search')
+  const url = new URL('https://global.oliveyoung.com/display/search')
   url.searchParams.set('query', `${brand} ${productName}`.trim())
   return url.toString()
 }
@@ -406,10 +412,14 @@ function resolveProductLinks(
         const candidates = rowsByCategory.get(category) ?? []
         const brandNeedle = normalizeForMatch(product.brand)
         const nameNeedle = normalizeForMatch(product.name)
+        const nameTokens = matchTokens(product.name)
 
         const matchedRow = candidates
           .map((row) => {
             const haystack = normalizeForMatch(`${row.brand ?? ''} ${row.name ?? ''}`)
+            const rowName = normalizeForMatch(row.name ?? '')
+            const rowTokens = matchTokens(row.name ?? '')
+            const sharedTokenCount = nameTokens.filter((token) => rowTokens.includes(token)).length
             let score = 0
 
             if (brandNeedle && haystack.includes(brandNeedle)) {
@@ -420,13 +430,19 @@ function resolveProductLinks(
               score += 8
             }
 
-            if (normalizeForMatch(row.name ?? '') === nameNeedle) {
+            if (rowName === nameNeedle) {
+              score += 4
+            }
+
+            score += sharedTokenCount * 2
+
+            if (nameTokens.length > 1 && sharedTokenCount === nameTokens.length) {
               score += 4
             }
 
             return { row, score }
           })
-          .filter((entry) => entry.score >= 8)
+          .filter((entry) => entry.score >= 6)
           .sort((left, right) => right.score - left.score)[0]?.row
 
         if (matchedRow?.global_affiliate_url || matchedRow?.affiliate_url) {
