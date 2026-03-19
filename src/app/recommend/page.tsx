@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+import { getProductPricePresentation, type PriceCurrencyCode } from '@/lib/pricing'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 
 const CATEGORY_KO: Record<string, string> = {
@@ -19,11 +20,14 @@ type Product = {
   id: string
   name: string
   brand: string
-  price: number
+  price: number | null
+  currency_code?: PriceCurrencyCode
+  display_price?: string | null
   category: string
   affiliate_url: string | null
   global_affiliate_url: string | null
   image_url: string | null
+  price_minor_unit?: boolean
   skin_profile: any
   similarity: number
   explanation?: string
@@ -36,6 +40,10 @@ type Region = ShoppingRegion
 
 function getDisplayMatchScore(similarity: number | null | undefined) {
   return similarity ? Math.round(similarity * 100) : 60
+}
+
+function getDisplayPrice(product: Product) {
+  return product.display_price ?? getProductPricePresentation(product.price, product.category).displayPrice
 }
 
 function ProductImage({ imageUrl, productName }: { imageUrl: string | null, productName: string }) {
@@ -284,6 +292,7 @@ export default function RecommendPage() {
           ) : (
             products.map(product => {
               const matchScore = getDisplayMatchScore(product.similarity)
+              const displayPrice = getDisplayPrice(product)
 
               return (
                 <div
@@ -312,7 +321,7 @@ export default function RecommendPage() {
                       </h2>
 
                       <p className="mt-2 text-xl font-semibold text-[#d94d82]">
-                        ${product.price.toLocaleString()}
+                        {displayPrice ?? 'Price unavailable'}
                       </p>
 
                       <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">

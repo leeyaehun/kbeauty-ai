@@ -201,6 +201,7 @@ function formatGlobalAmount(value: unknown) {
     return null
   }
 
+  // Global Olive Young prices are stored in `products.price` as USD minor units.
   return Math.round(numeric * 100)
 }
 

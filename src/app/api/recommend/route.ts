@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
 
+import { getProductPricePresentation, type PriceCurrencyCode } from '@/lib/pricing'
+
 const MATCH_COUNT = 6
 const MIN_MATCH_SCORE = 0.6
 const QUERY_TIMEOUT_MS = 12000
@@ -20,8 +22,11 @@ type RecommendedProduct = {
   name: string | null
   brand: string | null
   price: number | null
+  currency_code?: PriceCurrencyCode
+  display_price?: string | null
   category: string | null
   image_url: string | null
+  price_minor_unit?: boolean
   skin_profile: unknown
   affiliate_url?: string | null
   global_affiliate_url?: string | null
@@ -401,12 +406,19 @@ export async function POST(req: NextRequest) {
       recommendedProducts = await loadFallbackProducts()
     }
 
-    const mergedProducts = recommendedProducts.map((product) => ({
-      ...product,
-      similarity: normalizeMatchScore(product.similarity),
-      affiliate_url: product.affiliate_url ?? null,
-      global_affiliate_url: product.global_affiliate_url ?? null,
-    }))
+    const mergedProducts = recommendedProducts.map((product) => {
+      const pricePresentation = getProductPricePresentation(product.price, product.category)
+
+      return {
+        ...product,
+        affiliate_url: product.affiliate_url ?? null,
+        currency_code: pricePresentation.currencyCode,
+        display_price: pricePresentation.displayPrice,
+        global_affiliate_url: product.global_affiliate_url ?? null,
+        price_minor_unit: pricePresentation.priceMinorUnit,
+        similarity: normalizeMatchScore(product.similarity),
+      }
+    })
 
     return NextResponse.json({ products: mergedProducts })
   } catch (error: any) {

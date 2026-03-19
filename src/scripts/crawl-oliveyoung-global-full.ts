@@ -120,6 +120,7 @@ function pickNumber(source: SearchResponseProduct, keys: string[]) {
     }
 
     if (typeof value === 'string') {
+      // Global Olive Young prices are stored in `products.price` as USD minor units.
       const parsed = parsePrice(value)
 
       if (parsed > 0) {
