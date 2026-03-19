@@ -9,14 +9,16 @@ import {
   supabase,
 } from './oliveyoung-shared'
 
-type ZeroPriceProduct = {
+type TargetProduct = {
   affiliate_url: string | null
   brand: string | null
   id: string
   name: string | null
+  price: number | null
 }
 
 type Region = 'domestic' | 'global'
+type FixMode = 'zero' | 'suspicious-global'
 
 type PriceFixOutcome = 'updated' | 'nullified' | 'failed'
 
@@ -28,6 +30,11 @@ type PriceFixResult = {
 
 const CONCURRENCY = Math.max(1, Number.parseInt(process.env.FIX_ZERO_PRICE_CONCURRENCY ?? '10', 10) || 10)
 const FIX_ZERO_PRICE_LIMIT = Number.parseInt(process.env.FIX_ZERO_PRICE_LIMIT ?? '0', 10) || 0
+const FIX_PRICE_MODE = (process.env.FIX_PRICE_MODE ?? 'zero') as FixMode
+const FIX_SUSPICIOUS_GLOBAL_MAX_CENTS = Math.max(
+  1,
+  Number.parseInt(process.env.FIX_SUSPICIOUS_GLOBAL_MAX_CENTS ?? '1', 10) || 1
+)
 const PAGE_TIMEOUT_MS = Math.max(
   5000,
   Number.parseInt(process.env.FIX_ZERO_PRICE_PAGE_TIMEOUT_MS ?? '20000', 10) || 20000
@@ -49,23 +56,41 @@ const GLOBAL_SELECTORS = [
 
 const GLOBAL_DETAIL_DATA_URL = 'https://global.oliveyoung.com/product/detail-data'
 
-async function fetchZeroPriceProducts() {
-  const allRows: ZeroPriceProduct[] = []
+function getTargetLabel() {
+  if (FIX_PRICE_MODE === 'suspicious-global') {
+    return `global price <= ${FIX_SUSPICIOUS_GLOBAL_MAX_CENTS}`
+  }
+
+  return 'price = 0'
+}
+
+async function fetchTargetProducts() {
+  const allRows: TargetProduct[] = []
   const pageSize = 1000
 
   for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('products')
-      .select('id, name, brand, affiliate_url')
-      .eq('price', 0)
+      .select('id, name, brand, affiliate_url, price')
       .order('id', { ascending: true })
       .range(offset, offset + pageSize - 1)
 
-    if (error) {
-      throw new Error(`price=0 제품 조회 실패: ${error.message}`)
+    if (FIX_PRICE_MODE === 'suspicious-global') {
+      query = query
+        .like('affiliate_url', '%global.oliveyoung.com%')
+        .gt('price', 0)
+        .lte('price', FIX_SUSPICIOUS_GLOBAL_MAX_CENTS)
+    } else {
+      query = query.eq('price', 0)
     }
 
-    const rows = (data ?? []) as ZeroPriceProduct[]
+    const { data, error } = await query
+
+    if (error) {
+      throw new Error(`${getTargetLabel()} 제품 조회 실패: ${error.message}`)
+    }
+
+    const rows = (data ?? []) as TargetProduct[]
     allRows.push(...rows)
 
     if (rows.length < pageSize) {
@@ -251,7 +276,7 @@ async function fetchGlobalPriceFromApi(affiliateUrl: string) {
 }
 
 async function fixSinglePrice(
-  product: ZeroPriceProduct,
+  product: TargetProduct,
   contexts: Partial<Record<Region, BrowserContext>>
 ): Promise<PriceFixResult> {
   if (!product.affiliate_url) {
@@ -376,23 +401,33 @@ async function fixSinglePrice(
   }
 }
 
-async function countRemainingZeroPrices() {
-  const { count, error } = await supabase
+async function countRemainingTargets() {
+  let query = supabase
     .from('products')
     .select('*', { count: 'exact', head: true })
-    .eq('price', 0)
+
+  if (FIX_PRICE_MODE === 'suspicious-global') {
+    query = query
+      .like('affiliate_url', '%global.oliveyoung.com%')
+      .gt('price', 0)
+      .lte('price', FIX_SUSPICIOUS_GLOBAL_MAX_CENTS)
+  } else {
+    query = query.eq('price', 0)
+  }
+
+  const { count, error } = await query
 
   if (error) {
-    throw new Error(`남은 price=0 조회 실패: ${error.message}`)
+    throw new Error(`남은 ${getTargetLabel()} 조회 실패: ${error.message}`)
   }
 
   return count ?? 0
 }
 
 async function main() {
-  const products = await fetchZeroPriceProducts()
+  const products = await fetchTargetProducts()
 
-  console.log(`price = 0 제품 ${products.length}개 확인`)
+  console.log(`${getTargetLabel()} 제품 ${products.length}개 확인`)
 
   if (products.length === 0) {
     return
@@ -465,13 +500,13 @@ async function main() {
     await browser.close()
   }
 
-  const remainingZeroPrices = await countRemainingZeroPrices()
+  const remainingTargets = await countRemainingTargets()
 
   console.log('\n가격 보정 완료')
   console.log(`성공: ${successCount}`)
   console.log(`null 처리: ${nullifiedCount}`)
   console.log(`실패: ${failedCount}`)
-  console.log(`남은 price = 0: ${remainingZeroPrices}`)
+  console.log(`남은 ${getTargetLabel()}: ${remainingTargets}`)
 }
 
 main().catch((error) => {
