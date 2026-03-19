@@ -140,6 +140,7 @@ export default function PersonalColorPage() {
   const [result, setResult] = useState<PersonalColorResult | null>(null)
   const [selectedColor, setSelectedColor] = useState<string | null>(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
+  const [wheelAnimationVersion, setWheelAnimationVersion] = useState(0)
 
   useEffect(() => {
     let isActive = true
@@ -329,8 +330,9 @@ export default function PersonalColorPage() {
     <main
       className="min-h-screen px-5 py-6 md:px-8 md:py-10"
       style={{
-        background: buildPageBackground(seasonMeta.background),
+        background: buildPageBackground(selectedColor ?? seasonMeta.background),
         color: 'var(--ink)',
+        transition: 'background 500ms ease',
       }}
     >
       <div className="mx-auto max-w-6xl">
@@ -353,11 +355,13 @@ export default function PersonalColorPage() {
 
           <div className="mt-6">
             <PersonalColorCanvas
+              animateVersion={wheelAnimationVersion}
               ref={canvasRef}
               avoidColors={result.avoid_colors}
               backgroundHex={canvasBackground}
               bestColors={result.best_colors}
               imageData={capturedImage}
+              selectedHex={selectedColor}
               season={result.season}
             />
           </div>
@@ -370,7 +374,10 @@ export default function PersonalColorPage() {
               <p className="mt-2 text-sm text-[#5f4a61]">Tap a shade to tint the canvas behind your portrait.</p>
             </div>
             <button
-              onClick={() => setSelectedColor(null)}
+              onClick={() => {
+                setSelectedColor(null)
+                setWheelAnimationVersion((value) => value + 1)
+              }}
               className="rounded-full border border-[#2d1b2f]/12 bg-white/84 px-5 py-3 text-sm font-semibold text-[#5f4a61] transition hover:translate-y-[-1px]"
             >
               Reset to my colors

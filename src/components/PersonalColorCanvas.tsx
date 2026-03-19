@@ -47,10 +47,12 @@ export type PersonalColorCanvasHandle = {
 }
 
 type PersonalColorCanvasProps = {
+  animateVersion: number
   avoidColors: PersonalColorSwatch[]
   backgroundHex: string
   bestColors: PersonalColorSwatch[]
   imageData: string
+  selectedHex: string | null
   season: PersonalColorSeason
 }
 
@@ -119,6 +121,110 @@ function toGrayscale(hex: string) {
   const softened = Math.round(luminance * 0.78 + 36)
 
   return `rgb(${softened}, ${softened}, ${softened})`
+}
+
+function mixHexWithBlack(hex: string, weight: number) {
+  const rgb = hexToRgb(hex)
+
+  if (!rgb) {
+    return hex
+  }
+
+  const safeWeight = clamp(weight, 0, 1)
+  const r = Math.round(rgb.r * (1 - safeWeight))
+  const g = Math.round(rgb.g * (1 - safeWeight))
+  const b = Math.round(rgb.b * (1 - safeWeight))
+
+  return `rgb(${r}, ${g}, ${b})`
+}
+
+function rgbToHex(red: number, green: number, blue: number) {
+  return `#${[red, green, blue]
+    .map((value) => clamp(Math.round(value), 0, 255).toString(16).padStart(2, '0'))
+    .join('')}`
+}
+
+function hslToHex(hue: number, saturation: number, lightness: number) {
+  const safeHue = ((hue % 360) + 360) % 360
+  const safeSaturation = clamp(saturation, 0, 100) / 100
+  const safeLightness = clamp(lightness, 0, 100) / 100
+
+  const chroma = (1 - Math.abs(2 * safeLightness - 1)) * safeSaturation
+  const hueSegment = safeHue / 60
+  const intermediate = chroma * (1 - Math.abs((hueSegment % 2) - 1))
+
+  let red = 0
+  let green = 0
+  let blue = 0
+
+  if (hueSegment >= 0 && hueSegment < 1) {
+    red = chroma
+    green = intermediate
+  } else if (hueSegment < 2) {
+    red = intermediate
+    green = chroma
+  } else if (hueSegment < 3) {
+    green = chroma
+    blue = intermediate
+  } else if (hueSegment < 4) {
+    green = intermediate
+    blue = chroma
+  } else if (hueSegment < 5) {
+    red = intermediate
+    blue = chroma
+  } else {
+    red = chroma
+    blue = intermediate
+  }
+
+  const matchLightness = safeLightness - chroma / 2
+
+  return rgbToHex(
+    (red + matchLightness) * 255,
+    (green + matchLightness) * 255,
+    (blue + matchLightness) * 255
+  )
+}
+
+function hexToHsl(hex: string) {
+  const rgb = hexToRgb(hex)
+
+  if (!rgb) {
+    return null
+  }
+
+  const red = rgb.r / 255
+  const green = rgb.g / 255
+  const blue = rgb.b / 255
+  const max = Math.max(red, green, blue)
+  const min = Math.min(red, green, blue)
+  const delta = max - min
+  const lightness = (max + min) / 2
+
+  if (delta === 0) {
+    return { h: 0, l: lightness * 100, s: 0 }
+  }
+
+  const saturation = delta / (1 - Math.abs(2 * lightness - 1))
+  let hue = 0
+
+  switch (max) {
+    case red:
+      hue = 60 * (((green - blue) / delta) % 6)
+      break
+    case green:
+      hue = 60 * ((blue - red) / delta + 2)
+      break
+    default:
+      hue = 60 * ((red - green) / delta + 4)
+      break
+  }
+
+  return {
+    h: hue < 0 ? hue + 360 : hue,
+    l: lightness * 100,
+    s: saturation * 100,
+  }
 }
 
 function createDefaultCrop(image: HTMLImageElement): CropFocus {
@@ -195,12 +301,15 @@ function uniqueHexes(hexes: string[]) {
 function buildWheelSlices(
   season: PersonalColorSeason,
   bestColors: PersonalColorSwatch[],
-  avoidColors: PersonalColorSwatch[]
+  avoidColors: PersonalColorSwatch[],
+  selectedHex: string | null
 ): WheelSlice[] {
-  const preferredHexes = uniqueHexes([
-    ...bestColors.map((color) => color.hex),
-    ...SEASON_COLORS[season],
-  ]).slice(0, 20)
+  const preferredHexes = selectedHex
+    ? buildSelectedFamily(selectedHex)
+    : uniqueHexes([
+        ...bestColors.map((color) => color.hex),
+        ...SEASON_COLORS[season],
+      ]).slice(0, 20)
   const avoidHexes = uniqueHexes(avoidColors.map((color) => color.hex)).slice(0, 4)
   const slices: WheelSlice[] = preferredHexes.map((hex) => ({ hex, isAvoid: false }))
 
@@ -223,13 +332,31 @@ function buildWheelSlices(
   return slices
 }
 
+function buildSelectedFamily(selectedHex: string) {
+  const hsl = hexToHsl(selectedHex)
+
+  if (!hsl) {
+    return uniqueHexes(Array.from({ length: 20 }, () => selectedHex)).slice(0, 20)
+  }
+
+  return Array.from({ length: 20 }, (_, index) => {
+    const position = index / 19
+    const hueShift = (position - 0.5) * 26
+    const saturation = clamp(hsl.s + 12 - position * 18, 38, 96)
+    const lightness = clamp(30 + position * 42, 22, 82)
+    return hslToHex(hsl.h + hueShift, saturation, lightness)
+  })
+}
+
 const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorCanvasProps>(
   function PersonalColorCanvas(
     {
+      animateVersion,
       avoidColors,
       backgroundHex,
       bestColors,
       imageData,
+      selectedHex,
       season,
     },
     ref
@@ -289,6 +416,10 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
     }, [imageData])
 
     useEffect(() => {
+      hasAnimatedRef.current = false
+    }, [animateVersion])
+
+    useEffect(() => {
       const canvas = canvasRef.current
       const image = imageRef.current
       const crop = cropRef.current
@@ -305,7 +436,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
 
       const dpr = window.devicePixelRatio || 1
       const size = canvasSize
-      const slices = buildWheelSlices(season, bestColors, avoidColors)
+      const slices = buildWheelSlices(season, bestColors, avoidColors, selectedHex)
 
       canvas.width = Math.round(size * dpr)
       canvas.height = Math.round(size * dpr)
@@ -315,8 +446,8 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
 
       const centerX = size / 2
       const centerY = size / 2
-      const outerRadius = size * 0.48
-      const faceRadius = size * 0.22
+      const outerRadius = size * 0.82
+      const faceRadius = size * 0.19
       const totalSlices = slices.length
       const sliceAngle = (Math.PI * 2) / totalSlices
       let animationFrameId = 0
@@ -325,13 +456,13 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
         context.clearRect(0, 0, size, size)
 
         const background = context.createLinearGradient(0, 0, size, size)
-        background.addColorStop(0, mixHexWithWhite(backgroundHex, 0.14))
-        background.addColorStop(1, mixHexWithWhite(backgroundHex, 0.54))
+        background.addColorStop(0, mixHexWithWhite(backgroundHex, 0.1))
+        background.addColorStop(1, mixHexWithBlack(backgroundHex, 0.08))
         context.fillStyle = background
         context.fillRect(0, 0, size, size)
 
-        const glow = context.createRadialGradient(centerX, centerY, faceRadius * 0.8, centerX, centerY, outerRadius)
-        glow.addColorStop(0, 'rgba(255,255,255,0.12)')
+        const glow = context.createRadialGradient(centerX, centerY, faceRadius * 0.82, centerX, centerY, outerRadius)
+        glow.addColorStop(0, 'rgba(255,255,255,0.08)')
         glow.addColorStop(1, 'rgba(255,255,255,0)')
         context.fillStyle = glow
         context.fillRect(0, 0, size, size)
@@ -379,8 +510,8 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
         )
         context.restore()
 
-        context.strokeStyle = 'rgba(255,255,255,0.96)'
-        context.lineWidth = 6
+        context.strokeStyle = 'rgba(255,255,255,0.98)'
+        context.lineWidth = 5
         context.beginPath()
         context.arc(centerX, centerY, faceRadius + 3, 0, Math.PI * 2)
         context.stroke()
@@ -388,18 +519,8 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
         context.strokeStyle = 'rgba(45,27,47,0.06)'
         context.lineWidth = 1
         context.beginPath()
-        context.arc(centerX, centerY, outerRadius - 2, 0, Math.PI * 2)
+        context.arc(centerX, centerY, size * 0.47, 0, Math.PI * 2)
         context.stroke()
-
-        context.fillStyle = 'rgba(255,255,255,0.88)'
-        context.fillRect(0, size - 24, size, 24)
-        context.fillStyle = 'rgba(45,27,47,0.72)'
-        context.font = '700 11px "Avenir Next", "Avenir", "Noto Sans KR", sans-serif'
-        context.textAlign = 'left'
-        context.fillText('K-BEAUTY AI', 12, size - 8)
-        context.textAlign = 'right'
-        context.fillStyle = 'rgba(79,94,113,0.82)'
-        context.fillText('kbeauty-ai.vercel.app', size - 12, size - 8)
       }
 
       if (hasAnimatedRef.current) {
@@ -425,13 +546,13 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       animationFrameId = window.requestAnimationFrame(animate)
 
       return () => window.cancelAnimationFrame(animationFrameId)
-    }, [avoidColors, backgroundHex, bestColors, canvasSize, imageReady, season])
+    }, [animateVersion, avoidColors, backgroundHex, bestColors, canvasSize, imageReady, season, selectedHex])
 
     return (
-      <div ref={containerRef} className="mx-auto w-[90vw] max-w-[720px]">
+      <div ref={containerRef} className="mx-auto w-[84vw] max-w-[500px] md:w-full md:max-w-[560px]">
         <canvas
           ref={canvasRef}
-          className="aspect-square w-full rounded-[28px] shadow-[0_28px_70px_rgba(45,27,47,0.18)]"
+          className="aspect-square w-full rounded-[28px] shadow-[0_22px_52px_rgba(45,27,47,0.16)]"
         />
       </div>
     )
