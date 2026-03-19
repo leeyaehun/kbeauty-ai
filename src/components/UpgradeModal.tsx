@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+import { createClient } from '@/lib/supabase'
+
 type UpgradeModalProps = {
   open?: boolean
   inline?: boolean
@@ -34,6 +36,14 @@ export default function UpgradeModal({
     setError('')
 
     try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (!user) {
+        router.push('/login')
+        return
+      }
+
       const res = await fetch('/api/stripe/checkout', { method: 'POST' })
       const data = await res.json()
 

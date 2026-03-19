@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 import { getProductPricePresentation, type PriceCurrencyCode } from '@/lib/pricing'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
+import { createClient } from '@/lib/supabase'
 
 const CATEGORY_KO: Record<string, string> = {
   세럼: 'Serum',
@@ -370,6 +371,14 @@ export default function RecommendPage() {
           </p>
           <button
             onClick={async () => {
+              const supabase = createClient()
+              const { data: { user } } = await supabase.auth.getUser()
+
+              if (!user) {
+                router.push('/login')
+                return
+              }
+
               const res = await fetch('/api/stripe/checkout', { method: 'POST' })
               const data = await res.json()
               if (data.url) window.location.href = data.url
