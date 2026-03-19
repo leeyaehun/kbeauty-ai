@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import UpgradeModal from '@/components/UpgradeModal'
+import { createClient } from '@/lib/supabase'
 
 type ColorSwatch = {
   name: string
@@ -106,9 +107,52 @@ export default function PersonalColorPage() {
   const [activeTab, setActiveTab] = useState<MakeupCategoryKey>('foundation')
 
   useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search)
-    setShowUpgrade(searchParams.get('upgrade') === '1')
-    setParamsReady(true)
+    let isActive = true
+
+    async function loadMembershipAccess() {
+      const searchParams = new URLSearchParams(window.location.search)
+      const requestedUpgrade = searchParams.get('upgrade') === '1'
+
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+          if (isActive) {
+            setShowUpgrade(requestedUpgrade)
+          }
+          return
+        }
+
+        const { data: planData } = await supabase
+          .from('user_plans')
+          .select('plan')
+          .eq('user_id', user.id)
+          .single()
+
+        console.log('Current plan:', planData?.plan)
+
+        const hasMembership = planData?.plan === 'membership'
+
+        if (isActive) {
+          setShowUpgrade(requestedUpgrade && !hasMembership)
+        }
+      } catch {
+        if (isActive) {
+          setShowUpgrade(requestedUpgrade)
+        }
+      } finally {
+        if (isActive) {
+          setParamsReady(true)
+        }
+      }
+    }
+
+    loadMembershipAccess()
+
+    return () => {
+      isActive = false
+    }
   }, [])
 
   useEffect(() => {

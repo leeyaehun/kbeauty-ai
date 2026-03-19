@@ -379,6 +379,17 @@ export default function RecommendPage() {
                 return
               }
 
+              const { data: planData } = await supabase
+                .from('user_plans')
+                .select('plan')
+                .eq('user_id', user.id)
+                .single()
+
+              console.log('Current plan:', planData?.plan)
+
+              const hasMembership = planData?.plan === 'membership'
+              void hasMembership
+
               const res = await fetch('/api/stripe/checkout', { method: 'POST' })
               const data = await res.json()
               if (data.url) window.location.href = data.url
