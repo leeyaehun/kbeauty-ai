@@ -40,7 +40,7 @@ export default function UpgradeModal({
       const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
-        router.push('/login')
+        router.push('/login?redirect=checkout')
         return
       }
 
@@ -48,7 +48,7 @@ export default function UpgradeModal({
       const data = await res.json()
 
       if (res.status === 401) {
-        router.push('/login')
+        router.push('/login?redirect=checkout')
         return
       }
 

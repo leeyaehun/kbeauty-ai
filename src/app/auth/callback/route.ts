@@ -5,10 +5,15 @@ import { createServerSupabaseClient } from '@/lib/supabase'
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url)
   const code = searchParams.get('code')
+  const redirect = searchParams.get('redirect')
 
   if (code) {
     const supabase = await createServerSupabaseClient()
     await supabase.auth.exchangeCodeForSession(code)
+  }
+
+  if (redirect === 'checkout') {
+    return NextResponse.redirect(`${origin}/api/stripe/checkout-redirect`)
   }
 
   return NextResponse.redirect(`${origin}/analyze`)

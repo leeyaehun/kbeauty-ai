@@ -1,17 +1,24 @@
 'use client'
 
 import { createClient } from '@/lib/supabase'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
+  const [redirect, setRedirect] = useState('')
+
+  useEffect(() => {
+    const value = new URLSearchParams(window.location.search).get('redirect')
+    setRedirect(value ?? '')
+  }, [])
 
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback`,
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback?redirect=${redirect}`,
       }
     })
   }
