@@ -161,7 +161,7 @@ export default function ResultsPage() {
               .eq('user_id', user.id)
               .maybeSingle()
 
-            setIsProUser(userPlan?.plan === 'pro')
+            setIsProUser(userPlan?.plan === 'membership')
 
             await supabase.from('analyses').insert({
               user_id: user.id,
@@ -337,7 +337,7 @@ export default function ResultsPage() {
                 >
                   Discover Your Personal Color ✨
                   <span className="ml-2 rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">
-                    Pro
+                    Membership
                   </span>
                 </button>
 

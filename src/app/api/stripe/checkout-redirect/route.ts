@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
         }
       ],
       mode: 'subscription',
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/pro/success`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/membership/success`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/recommend`,
       customer_email: user.email,
       metadata: {

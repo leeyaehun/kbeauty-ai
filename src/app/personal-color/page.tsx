@@ -219,7 +219,7 @@ export default function PersonalColorPage() {
           <aside className="space-y-6">
             <div className="brand-card overflow-hidden p-8">
               <div className="mb-4 inline-flex rounded-full bg-[linear-gradient(135deg,rgba(255,107,157,0.14),rgba(246,222,177,0.34))] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">
-                Pro analysis
+                Membership analysis
               </div>
               <p className="text-sm uppercase tracking-[0.18em] text-[var(--muted)]">Your season</p>
               <div className={`mt-4 inline-flex rounded-full px-5 py-3 text-sm font-semibold tracking-[0.16em] ${seasonMeta.className}`}>

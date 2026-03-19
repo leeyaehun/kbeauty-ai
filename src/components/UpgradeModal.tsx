@@ -70,13 +70,13 @@ export default function UpgradeModal({
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="brand-chip px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">
-            Pro feature
+            Membership feature
           </div>
           <h2 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
             Unlock your full beauty profile
           </h2>
           <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
-            Upgrade to Pro to access advanced color analysis, richer history tracking, and upcoming makeup guidance.
+            Get Membership to access advanced color analysis, richer history tracking, and upcoming makeup guidance.
           </p>
         </div>
 
@@ -110,7 +110,7 @@ export default function UpgradeModal({
         disabled={loading}
         className="brand-button-primary mt-7 w-full py-4 font-semibold"
       >
-        {loading ? 'Preparing checkout...' : '$9/month — Start Pro'}
+        {loading ? 'Preparing checkout...' : 'Membership — $9/month'}
       </button>
     </div>
   )

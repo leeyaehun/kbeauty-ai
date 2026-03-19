@@ -64,11 +64,11 @@ export async function POST(req: NextRequest) {
           .from('user_plans')
           .upsert({
             user_id: userId,
-            plan: 'pro',
+            plan: 'membership',
             stripe_customer_id: session.customer as string,
           }, { onConflict: 'user_id' })
 
-        console.log(`유저 ${userId} Pro 업그레이드 완료`)
+        console.log(`유저 ${userId} Membership 업그레이드 완료`)
       }
       break
     }

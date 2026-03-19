@@ -618,8 +618,8 @@ export async function POST(req: NextRequest) {
       .eq('user_id', user.id)
       .maybeSingle()
 
-    if (userPlan?.plan !== 'pro') {
-      return NextResponse.json({ error: 'Personal color analysis is a Pro feature.' }, { status: 403 })
+    if (userPlan?.plan !== 'membership') {
+      return NextResponse.json({ error: 'Personal color analysis is a Membership feature.' }, { status: 403 })
     }
 
     const { imageBase64 } = await req.json()

@@ -39,7 +39,7 @@ export default function LoginPage() {
               Save your glow story
             </h1>
             <p className="mx-auto mb-10 max-w-md text-base leading-7 text-[var(--muted)]">
-              Sign in to keep your analysis history, unlock a smoother Pro journey, and return to your personalized K-beauty recommendations anytime.
+              Sign in to keep your analysis history, unlock a smoother Membership journey, and return to your personalized K-beauty recommendations anytime.
             </p>
 
             <button

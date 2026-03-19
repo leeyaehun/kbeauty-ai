@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.json({ error: 'Please sign in to start Pro.' }, { status: 401 })
+      return NextResponse.json({ error: 'Please sign in to get Membership.' }, { status: 401 })
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
         }
       ],
       mode: 'subscription',
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/pro/success`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/membership/success`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/analyze`,
       customer_email: user.email,
       metadata: {

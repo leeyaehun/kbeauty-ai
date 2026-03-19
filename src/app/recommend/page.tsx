@@ -365,7 +365,7 @@ export default function RecommendPage() {
         </div>
 
         <div className="brand-card mt-6 p-6 text-center">
-          <p className="text-lg font-semibold text-[var(--ink)]">K-Beauty AI Pro</p>
+          <p className="text-lg font-semibold text-[var(--ink)]">K-Beauty AI Membership</p>
           <p className="mt-2 text-sm text-[var(--muted)]">
             Unlimited analyses, history storage, and six product recommendations every time.
           </p>
@@ -386,7 +386,7 @@ export default function RecommendPage() {
             }}
             className="brand-button-primary mt-5 w-full py-4 font-semibold"
           >
-            Start Pro — $9/month
+            Membership — $9/month
           </button>
         </div>
 
