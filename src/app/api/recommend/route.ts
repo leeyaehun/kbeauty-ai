@@ -3,6 +3,7 @@ import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
 
 const MATCH_COUNT = 6
+const MIN_MATCH_SCORE = 0.6
 const QUERY_TIMEOUT_MS = 12000
 const MAX_VECTOR_CANDIDATES = 2500
 const DEFAULT_CATEGORIES = ['세럼', '크림', '토너', '클렌저', '선케어']
@@ -281,13 +282,13 @@ function buildUserProfileText(analysisResult: any) {
 function normalizeMatchScore(similarity: unknown) {
   const raw = typeof similarity === 'number' ? similarity : Number(similarity)
 
-  if (Number.isNaN(raw)) {
-    return 0.6
+  if (Number.isNaN(raw) || raw <= 0) {
+    return MIN_MATCH_SCORE
   }
 
   const weighted = Math.max(0, Math.min(raw * 1.5, 1))
 
-  return Number((0.6 + weighted * 0.39).toFixed(4))
+  return Number((MIN_MATCH_SCORE + weighted * 0.39).toFixed(4))
 }
 
 export async function POST(req: NextRequest) {
@@ -328,7 +329,7 @@ export async function POST(req: NextRequest) {
         .slice(0, MATCH_COUNT)
         .map((product) => ({
           ...product,
-          similarity: null,
+          similarity: MIN_MATCH_SCORE,
         }))
     }
 
@@ -402,8 +403,7 @@ export async function POST(req: NextRequest) {
 
     const mergedProducts = recommendedProducts.map((product) => ({
       ...product,
-      similarity:
-        typeof product.similarity === 'number' ? normalizeMatchScore(product.similarity) : null,
+      similarity: normalizeMatchScore(product.similarity),
       affiliate_url: product.affiliate_url ?? null,
       global_affiliate_url: product.global_affiliate_url ?? null,
     }))

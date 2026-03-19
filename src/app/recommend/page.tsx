@@ -34,6 +34,10 @@ type Product = {
 
 type Region = ShoppingRegion
 
+function getDisplayMatchScore(similarity: number | null | undefined) {
+  return similarity ? Math.round(similarity * 100) : 60
+}
+
 function ProductImage({ imageUrl, productName }: { imageUrl: string | null, productName: string }) {
   const [imageFailed, setImageFailed] = useState(false)
 
@@ -278,11 +282,14 @@ export default function RecommendPage() {
               </p>
             </div>
           ) : (
-            products.map(product => (
-              <div
-                key={product.id}
-                className="brand-card overflow-hidden p-6 md:p-7"
-              >
+            products.map(product => {
+              const matchScore = getDisplayMatchScore(product.similarity)
+
+              return (
+                <div
+                  key={product.id}
+                  className="brand-card overflow-hidden p-6 md:p-7"
+                >
                 <div className="flex flex-col gap-5">
                   <div className="flex items-start gap-4">
                     <ProductImage
@@ -318,14 +325,14 @@ export default function RecommendPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold text-[var(--muted)]">Match score</span>
                       <span className="text-lg font-semibold text-[#d94d82]">
-                        {Math.round(product.similarity * 100)}%
+                        {matchScore}%
                       </span>
                     </div>
 
                     <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
                       <div
                         className="h-full rounded-full bg-[linear-gradient(90deg,#ff6b9d,#f6deb1)]"
-                        style={{ width: `${Math.round(product.similarity * 100)}%` }}
+                        style={{ width: `${matchScore}%` }}
                       />
                     </div>
 
@@ -342,7 +349,8 @@ export default function RecommendPage() {
                   </div>
                 </div>
               </div>
-            ))
+              )
+            })
           )}
         </div>
 
