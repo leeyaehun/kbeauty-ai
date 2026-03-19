@@ -1,20 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { createClient } from '@supabase/supabase-js'
 
-import { createServerSupabaseClient } from '@/lib/supabase'
+const MATCH_COUNT = 6
+const QUERY_TIMEOUT_MS = 12000
+const MAX_VECTOR_CANDIDATES = 2500
+const DEFAULT_CATEGORIES = ['세럼', '크림', '토너', '클렌저', '선케어']
+const CATEGORY_ALIASES: Record<string, string[]> = {
+  세럼: ['세럼', 'serum'],
+  크림: ['크림', 'cream'],
+  토너: ['토너', 'toner'],
+  클렌저: ['클렌저', 'cleanser'],
+  선케어: ['선케어', 'sun_care'],
+}
 
 type RecommendedProduct = {
   id: string
+  name: string | null
+  brand: string | null
+  price: number | null
+  category: string | null
+  image_url: string | null
+  skin_profile: unknown
   affiliate_url?: string | null
   global_affiliate_url?: string | null
   similarity?: number | null
-  [key: string]: unknown
 }
 
-type ProductUrlRow = {
+type CandidateProductRow = {
   id: string
+  name: string | null
+  brand: string | null
+  price: number | null
+  category: string | null
   affiliate_url: string | null
   global_affiliate_url: string | null
+  image_url: string | null
+  skin_profile: unknown
+  embedding?: string | null
 }
 
 function isMissingGlobalAffiliateUrlColumn(error: unknown) {
@@ -28,47 +51,216 @@ function isMissingGlobalAffiliateUrlColumn(error: unknown) {
   return code === '42703' && typeof message === 'string' && message.includes('global_affiliate_url')
 }
 
-async function loadProductUrls(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, productIds: string[]) {
-  const fullQuery = await supabase
-    .from('products')
-    .select('id, affiliate_url, global_affiliate_url')
-    .in('id', productIds)
+function createServiceRoleSupabaseClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!fullQuery.error) {
+  if (!url || !serviceRoleKey) {
+    throw new Error('Supabase service role credentials are not configured')
+  }
+
+  return createClient(url, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+}
+
+async function withQueryTimeout<T>(operation: (signal: AbortSignal) => Promise<T>) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort('Supabase query timeout'), QUERY_TIMEOUT_MS)
+
+  try {
+    return await operation(controller.signal)
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+function resolveSearchCategories(category: string | null) {
+  if (category && CATEGORY_ALIASES[category]) {
+    return CATEGORY_ALIASES[category]
+  }
+
+  if (category) {
+    return [category]
+  }
+
+  return DEFAULT_CATEGORIES.flatMap((entry) => CATEGORY_ALIASES[entry] ?? [entry])
+}
+
+function shuffle<T>(values: T[]) {
+  const copy = [...values]
+
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]]
+  }
+
+  return copy
+}
+
+function parseEmbeddingVector(value: string | null | undefined) {
+  if (!value) {
+    return null
+  }
+
+  const trimmed = value.trim()
+
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) {
+    return null
+  }
+
+  const parsed = trimmed
+    .slice(1, -1)
+    .split(',')
+    .map((entry) => Number.parseFloat(entry))
+
+  return parsed.some((entry) => Number.isNaN(entry)) ? null : parsed
+}
+
+function cosineSimilarity(left: number[], right: number[]) {
+  if (left.length !== right.length || left.length === 0) {
+    return 0
+  }
+
+  let dotProduct = 0
+  let leftNorm = 0
+  let rightNorm = 0
+
+  for (let index = 0; index < left.length; index += 1) {
+    const leftValue = left[index]
+    const rightValue = right[index]
+    dotProduct += leftValue * rightValue
+    leftNorm += leftValue * leftValue
+    rightNorm += rightValue * rightValue
+  }
+
+  if (leftNorm === 0 || rightNorm === 0) {
+    return 0
+  }
+
+  return dotProduct / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm))
+}
+
+function isRecommendedProduct(value: RecommendedProduct | null): value is RecommendedProduct {
+  return value !== null
+}
+
+function normalizeCandidateRows(rows: unknown) {
+  const values = Array.isArray(rows) ? rows : []
+
+  return values.map((product) => {
+    const row = product as Record<string, unknown>
+
     return {
-      data: (fullQuery.data ?? []) as ProductUrlRow[],
+      id: typeof row.id === 'string' ? row.id : '',
+      name: typeof row.name === 'string' ? row.name : null,
+      brand: typeof row.brand === 'string' ? row.brand : null,
+      price: typeof row.price === 'number' ? row.price : null,
+      category: typeof row.category === 'string' ? row.category : null,
+      affiliate_url: typeof row.affiliate_url === 'string' ? row.affiliate_url : null,
+      global_affiliate_url:
+        typeof row.global_affiliate_url === 'string' ? row.global_affiliate_url : null,
+      image_url: typeof row.image_url === 'string' ? row.image_url : null,
+      skin_profile: row.skin_profile ?? null,
+      embedding: typeof row.embedding === 'string' ? row.embedding : null,
+    }
+  }).filter((row) => row.id.length > 0)
+}
+
+async function selectProducts(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+  categories: string[],
+  columns: string,
+  limit?: number,
+  signal?: AbortSignal
+) {
+  let fullQuery = supabase
+    .from('products')
+    .select(columns)
+    .in('category', categories)
+    .not('embedding', 'is', null)
+
+  if (signal) {
+    fullQuery = fullQuery.abortSignal(signal)
+  }
+
+  if (typeof limit === 'number') {
+    fullQuery = fullQuery.limit(limit)
+  }
+
+  const fullResult = await fullQuery
+
+  if (!fullResult.error) {
+    return {
+      data: normalizeCandidateRows(fullResult.data),
       error: null,
     }
   }
 
-  if (!isMissingGlobalAffiliateUrlColumn(fullQuery.error)) {
+  if (!isMissingGlobalAffiliateUrlColumn(fullResult.error)) {
     return {
       data: null,
-      error: fullQuery.error,
+      error: fullResult.error,
     }
   }
 
   console.warn('global_affiliate_url column is missing; falling back to affiliate_url only.')
 
-  const fallbackQuery = await supabase
+  let fallbackQuery = supabase
     .from('products')
-    .select('id, affiliate_url')
-    .in('id', productIds)
+    .select(columns.replace(', global_affiliate_url', ''))
+    .in('category', categories)
+    .not('embedding', 'is', null)
 
-  if (fallbackQuery.error) {
+  if (signal) {
+    fallbackQuery = fallbackQuery.abortSignal(signal)
+  }
+
+  if (typeof limit === 'number') {
+    fallbackQuery = fallbackQuery.limit(limit)
+  }
+
+  const fallbackResult = await fallbackQuery
+
+  if (fallbackResult.error) {
     return {
       data: null,
-      error: fallbackQuery.error,
+      error: fallbackResult.error,
     }
   }
 
   return {
-    data: (fallbackQuery.data ?? []).map((product) => ({
-      id: product.id,
-      affiliate_url: product.affiliate_url,
+    data: normalizeCandidateRows(fallbackResult.data).map((product) => ({
+      ...product,
       global_affiliate_url: null,
     })),
     error: null,
+  }
+}
+
+async function countSearchCandidates(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+  categories: string[],
+  signal?: AbortSignal
+) {
+  let query = supabase
+    .from('products')
+    .select('id', { count: 'exact', head: true })
+    .in('category', categories)
+    .not('embedding', 'is', null)
+
+  if (signal) {
+    query = query.abortSignal(signal)
+  }
+
+  const result = await query
+
+  return {
+    count: typeof result.count === 'number' ? result.count : 0,
+    error: result.error,
   }
 }
 
@@ -114,55 +306,107 @@ export async function POST(req: NextRequest) {
     })
     const userEmbedding = embeddingResponse.data[0].embedding
 
-    const supabase = await createServerSupabaseClient()
-    const { data: products, error } = await supabase.rpc('match_products', {
-      query_embedding: userEmbedding,
-      skin_type_filter: null,
-      category_filter: category || null,
-      match_count: 6,
-    })
+    const searchCategories = resolveSearchCategories(category ?? null)
+    const supabase = createServiceRoleSupabaseClient()
 
-    if (error) {
-      console.error('Product lookup failed:', error)
-      return NextResponse.json({ error: 'We couldn’t load product recommendations.' }, { status: 500 })
-    }
+    async function loadFallbackProducts() {
+      const { data, error } = await withQueryTimeout((signal) =>
+        selectProducts(
+          supabase,
+          searchCategories,
+          'id, name, brand, price, category, affiliate_url, global_affiliate_url, image_url, skin_profile',
+          120,
+          signal
+        )
+      )
 
-    const recommendedProducts = (products ?? []) as RecommendedProduct[]
-    const productIds = recommendedProducts
-      .map((product) => product.id)
-      .filter((id): id is string => Boolean(id))
-
-    if (productIds.length === 0) {
-      return NextResponse.json({ products: [] })
-    }
-
-    const { data: productUrls, error: productUrlsError } = await loadProductUrls(supabase, productIds)
-
-    if (productUrlsError) {
-      console.error('Product URL merge failed:', productUrlsError)
-      return NextResponse.json({ error: 'We couldn’t load product recommendations.' }, { status: 500 })
-    }
-
-    const productUrlMap = new Map(
-      (productUrls ?? []).map((product) => [
-        product.id,
-        {
-          affiliate_url: product.affiliate_url,
-          global_affiliate_url: product.global_affiliate_url,
-        },
-      ])
-    )
-
-    const mergedProducts = recommendedProducts.map((product) => {
-      const mergedUrls = productUrlMap.get(product.id)
-
-      return {
-        ...product,
-        similarity: normalizeMatchScore(product.similarity),
-        affiliate_url: mergedUrls?.affiliate_url ?? product.affiliate_url ?? null,
-        global_affiliate_url: mergedUrls?.global_affiliate_url ?? product.global_affiliate_url ?? null,
+      if (error) {
+        throw error
       }
-    })
+
+      return shuffle(data ?? [])
+        .slice(0, MATCH_COUNT)
+        .map((product) => ({
+          ...product,
+          similarity: null,
+        }))
+    }
+
+    let recommendedProducts: RecommendedProduct[] = []
+
+    try {
+      const { count, error: countError } = await withQueryTimeout((signal) =>
+        countSearchCandidates(supabase, searchCategories, signal)
+      )
+
+      if (countError) {
+        throw countError
+      }
+
+      if ((count ?? 0) === 0) {
+        return NextResponse.json({ products: [] })
+      }
+
+      if ((count ?? 0) > MAX_VECTOR_CANDIDATES) {
+        console.warn(
+          `Skipping vector similarity search for ${count} candidates in ${searchCategories.join(', ')}`
+        )
+        recommendedProducts = await loadFallbackProducts()
+      } else {
+        const { data, error } = await withQueryTimeout((signal) =>
+          selectProducts(
+            supabase,
+            searchCategories,
+            'id, name, brand, price, category, affiliate_url, global_affiliate_url, image_url, skin_profile, embedding',
+            count ?? MAX_VECTOR_CANDIDATES,
+            signal
+          )
+        )
+
+        if (error) {
+          throw error
+        }
+
+        const scoredProducts: Array<RecommendedProduct | null> = (data ?? [])
+          .map((product) => {
+            const embedding = parseEmbeddingVector(product.embedding)
+
+            if (!embedding) {
+              return null
+            }
+
+            return {
+              id: product.id,
+              name: product.name,
+              brand: product.brand,
+              price: product.price,
+              category: product.category,
+              image_url: product.image_url,
+              skin_profile: product.skin_profile,
+              affiliate_url: product.affiliate_url,
+              global_affiliate_url: product.global_affiliate_url,
+              similarity: cosineSimilarity(userEmbedding, embedding),
+            }
+          })
+        const rankedProducts: RecommendedProduct[] = scoredProducts
+          .filter(isRecommendedProduct)
+          .sort((left, right) => (right.similarity ?? 0) - (left.similarity ?? 0))
+          .slice(0, MATCH_COUNT)
+
+        recommendedProducts = rankedProducts
+      }
+    } catch (error) {
+      console.error('Vector recommendation failed, falling back to category picks:', error)
+      recommendedProducts = await loadFallbackProducts()
+    }
+
+    const mergedProducts = recommendedProducts.map((product) => ({
+      ...product,
+      similarity:
+        typeof product.similarity === 'number' ? normalizeMatchScore(product.similarity) : null,
+      affiliate_url: product.affiliate_url ?? null,
+      global_affiliate_url: product.global_affiliate_url ?? null,
+    }))
 
     return NextResponse.json({ products: mergedProducts })
   } catch (error: any) {
