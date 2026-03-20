@@ -1,6 +1,6 @@
 export const CARE_SUBCATEGORIES = {
-  Hair: ['Damaged Hair', 'Hair Loss', 'Oily Scalp', 'Dry Scalp', 'Curl & Frizz', 'General'],
-  Body: ['Dry Skin', 'Rough Skin', 'Sensitive Skin', 'Body Acne', 'General'],
+  Hair: ['General', 'Damaged Hair', 'Hair Loss', 'Curl & Frizz', 'Oily Scalp', 'Dry Scalp'],
+  Body: ['General', 'Dry Skin', 'Rough Skin', 'Sensitive Skin', 'Body Acne'],
 } as const
 
 export type CareCategory = keyof typeof CARE_SUBCATEGORIES
