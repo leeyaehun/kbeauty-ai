@@ -10,6 +10,7 @@ import ToastMessage from '@/components/ToastMessage'
 import { getProductPricePresentation, type PriceCurrencyCode } from '@/lib/pricing'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
+import { addWishlistProductId, readWishlistProductIds, removeWishlistProductId } from '@/lib/wishlist-storage'
 
 const CATEGORY_LABELS: Record<string, string> = {
   Toner: 'Toner',
@@ -136,15 +137,19 @@ export default function RecommendPage() {
 
       try {
         const res = await fetch('/api/wishlist', { cache: 'no-store' })
+        const data = await res.json().catch(() => ({}))
 
         if (!res.ok) {
           if (isActive) {
+            if (data.error_code === 'wishlist_table_missing') {
+              setWishlistIds(new Set(readWishlistProductIds(user.id)))
+              return
+            }
+
             setWishlistIds(new Set())
           }
           return
         }
-
-        const data = await res.json()
 
         if (isActive) {
           setWishlistIds(new Set((data.productIds ?? []) as string[]))
@@ -163,13 +168,7 @@ export default function RecommendPage() {
     }
   }, [user])
 
-  const pathnameForLogin = useMemo(() => {
-    if (selectedCategory) {
-      return '/recommend'
-    }
-
-    return '/recommend'
-  }, [selectedCategory])
+  const pathnameForLogin = useMemo(() => '/recommend', [])
 
   async function handleWishlistToggle(productId: string) {
     if (pendingWishlistIds.has(productId)) {
@@ -205,6 +204,17 @@ export default function RecommendPage() {
       })
 
       const data = await res.json().catch(() => ({}))
+
+      if (res.status === 503 && data.error_code === 'wishlist_table_missing') {
+        if (isSaved) {
+          removeWishlistProductId(user.id, productId)
+        } else {
+          addWishlistProductId(user.id, productId)
+        }
+
+        setToastMessage(isSaved ? 'Removed from wishlist' : 'Added to wishlist')
+        return
+      }
 
       if (!res.ok) {
         throw new Error(data.error || 'Failed to update wishlist.')

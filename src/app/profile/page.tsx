@@ -8,6 +8,7 @@ import type { User } from '@supabase/supabase-js'
 import RegionModal from '@/components/RegionModal'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
+import { readWishlistProductIds } from '@/lib/wishlist-storage'
 
 type UserPlan = 'free' | 'membership'
 
@@ -76,7 +77,13 @@ export default function ProfilePage() {
           const wishlistData = await wishlistRes.json()
           setWishlistCount(Array.isArray(wishlistData.items) ? wishlistData.items.length : 0)
         } else {
-          setWishlistCount(0)
+          const wishlistData = await wishlistRes.json().catch(() => ({}))
+
+          if (wishlistData.error_code === 'wishlist_table_missing') {
+            setWishlistCount(readWishlistProductIds(currentUser.id).length)
+          } else {
+            setWishlistCount(0)
+          }
         }
       } else {
         setPlan('free')

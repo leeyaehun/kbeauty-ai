@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from '@/lib/supabase'
 
 type WishlistRow = {
   created_at: string
@@ -38,34 +38,95 @@ function normalizeWishlistProduct(value: WishlistRow['product']) {
 }
 
 type WishlistProduct = {
-    affiliate_url: string | null
-    brand: string | null
-    category: string | null
-    global_affiliate_url: string | null
-    id: string
-    image_url: string | null
-    name: string | null
-    price: number | null
+  affiliate_url: string | null
+  brand: string | null
+  category: string | null
+  global_affiliate_url: string | null
+  id: string
+  image_url: string | null
+  name: string | null
+  price: number | null
 }
 
 async function getAuthenticatedUser() {
-  const supabase = await createServerSupabaseClient()
+  const authSupabase = await createServerSupabaseClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser()
+  } = await authSupabase.auth.getUser()
 
-  return { supabase, user }
+  return {
+    databaseSupabase: createServiceRoleSupabaseClient(),
+    user,
+  }
 }
 
-export async function GET() {
+function isMissingWishlistTable(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const code = 'code' in error ? error.code : null
+  const message = 'message' in error ? error.message : null
+
+  return (
+    code === 'PGRST205' ||
+    (typeof message === 'string' && message.includes("Could not find the table 'public.wishlists'"))
+  )
+}
+
+function normalizeProductIdsParam(value: string | null) {
+  if (!value) {
+    return []
+  }
+
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+export async function GET(req: NextRequest) {
   try {
-    const { supabase, user } = await getAuthenticatedUser()
+    const { databaseSupabase, user } = await getAuthenticatedUser()
 
     if (!user) {
       return NextResponse.json({ error: 'Please sign in to view your wishlist.' }, { status: 401 })
     }
 
-    const { data, error } = await supabase
+    const fallbackProductIds = normalizeProductIdsParam(req.nextUrl.searchParams.get('productIds'))
+
+    if (fallbackProductIds.length > 0) {
+      const { data, error } = await databaseSupabase
+        .from('products')
+        .select(`
+          id,
+          name,
+          brand,
+          price,
+          category,
+          affiliate_url,
+          global_affiliate_url,
+          image_url
+        `)
+        .in('id', fallbackProductIds)
+
+      if (error) {
+        throw error
+      }
+
+      const items = (data ?? []).map((product) => ({
+        created_at: '',
+        product,
+        product_id: product.id,
+      }))
+
+      return NextResponse.json({
+        items,
+        productIds: items.map((entry) => entry.product_id),
+      })
+    }
+
+    const { data, error } = await databaseSupabase
       .from('wishlists')
       .select(`
         product_id,
@@ -85,7 +146,14 @@ export async function GET() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      throw new Error(error.message)
+      if (isMissingWishlistTable(error)) {
+        return NextResponse.json(
+          { error: 'Wishlist table is not available yet.', error_code: 'wishlist_table_missing' },
+          { status: 503 }
+        )
+      }
+
+      throw error
     }
 
     const items = ((data ?? []) as unknown as WishlistRow[])
@@ -106,7 +174,12 @@ export async function GET() {
     })
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to load wishlist.' },
+      {
+        error:
+          typeof error === 'object' && error && 'message' in error && typeof error.message === 'string'
+            ? error.message
+            : 'Failed to load wishlist.',
+      },
       { status: 500 }
     )
   }
@@ -114,7 +187,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { supabase, user } = await getAuthenticatedUser()
+    const { databaseSupabase, user } = await getAuthenticatedUser()
 
     if (!user) {
       return NextResponse.json({ error: 'Please sign in to save products.' }, { status: 401 })
@@ -126,7 +199,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'productId is required.' }, { status: 400 })
     }
 
-    const { error } = await supabase
+    const { error } = await databaseSupabase
       .from('wishlists')
       .upsert(
         {
@@ -139,13 +212,25 @@ export async function POST(req: NextRequest) {
       )
 
     if (error) {
-      throw new Error(error.message)
+      if (isMissingWishlistTable(error)) {
+        return NextResponse.json(
+          { error: 'Wishlist table is not available yet.', error_code: 'wishlist_table_missing' },
+          { status: 503 }
+        )
+      }
+
+      throw error
     }
 
     return NextResponse.json({ ok: true })
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to save wishlist item.' },
+      {
+        error:
+          typeof error === 'object' && error && 'message' in error && typeof error.message === 'string'
+            ? error.message
+            : 'Failed to save wishlist item.',
+      },
       { status: 500 }
     )
   }
@@ -153,7 +238,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { supabase, user } = await getAuthenticatedUser()
+    const { databaseSupabase, user } = await getAuthenticatedUser()
 
     if (!user) {
       return NextResponse.json({ error: 'Please sign in to update your wishlist.' }, { status: 401 })
@@ -165,20 +250,32 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'productId is required.' }, { status: 400 })
     }
 
-    const { error } = await supabase
+    const { error } = await databaseSupabase
       .from('wishlists')
       .delete()
       .eq('user_id', user.id)
       .eq('product_id', productId)
 
     if (error) {
-      throw new Error(error.message)
+      if (isMissingWishlistTable(error)) {
+        return NextResponse.json(
+          { error: 'Wishlist table is not available yet.', error_code: 'wishlist_table_missing' },
+          { status: 503 }
+        )
+      }
+
+      throw error
     }
 
     return NextResponse.json({ ok: true })
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to remove wishlist item.' },
+      {
+        error:
+          typeof error === 'object' && error && 'message' in error && typeof error.message === 'string'
+            ? error.message
+            : 'Failed to remove wishlist item.',
+      },
       { status: 500 }
     )
   }
