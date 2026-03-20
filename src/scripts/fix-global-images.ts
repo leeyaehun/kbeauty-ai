@@ -25,6 +25,14 @@ type ProductRow = {
   name: string | null
 }
 
+type ProductQueryRow = {
+  affiliate_url?: unknown
+  brand?: unknown
+  global_affiliate_url?: unknown
+  id?: unknown
+  name?: unknown
+}
+
 function isMissingGlobalAffiliateUrlColumn(error: unknown) {
   if (!error || typeof error !== 'object') {
     return false
@@ -114,7 +122,7 @@ async function loadTargetProducts() {
       .or('image_url.is.null,image_url.eq.')
       .range(from, to)
 
-    let data = fullResult.data
+    let data = fullResult.data as ProductQueryRow[] | null
 
     if (fullResult.error) {
       if (!isMissingGlobalAffiliateUrlColumn(fullResult.error)) {
@@ -132,7 +140,7 @@ async function loadTargetProducts() {
         throw new Error(`Failed to load target products: ${fallbackResult.error.message}`)
       }
 
-      data = fallbackResult.data
+      data = fallbackResult.data as ProductQueryRow[] | null
     }
 
     if (!data || data.length === 0) {
