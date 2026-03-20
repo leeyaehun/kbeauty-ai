@@ -42,6 +42,97 @@ export const SEASON_COLORS: Record<PersonalColorSeason, string[]> = {
   ],
 }
 
+export const SEASON_COLOR_SWATCHES: Record<PersonalColorSeason, PersonalColorSwatch[]> = {
+  autumn_warm: [
+    { hex: '#8B4513', name: 'Saddle Brown' },
+    { hex: '#A0522D', name: 'Sienna' },
+    { hex: '#CD853F', name: 'Peru' },
+    { hex: '#D2691E', name: 'Cinnamon' },
+    { hex: '#B8860B', name: 'Antique Gold' },
+    { hex: '#DAA520', name: 'Goldenrod' },
+    { hex: '#808000', name: 'Olive' },
+    { hex: '#556B2F', name: 'Moss Green' },
+    { hex: '#6B8E23', name: 'Olive Drab' },
+    { hex: '#8FBC8F', name: 'Sage Green' },
+    { hex: '#BDB76B', name: 'Dark Khaki' },
+    { hex: '#F4A460', name: 'Sandy Tan' },
+    { hex: '#DEB887', name: 'Burlywood' },
+    { hex: '#D2B48C', name: 'Camel Beige' },
+    { hex: '#BC8F8F', name: 'Dusty Rose Brown' },
+    { hex: '#C19A6B', name: 'Warm Camel' },
+    { hex: '#A0785A', name: 'Toffee Brown' },
+    { hex: '#8B7355', name: 'Mushroom Brown' },
+    { hex: '#996633', name: 'Bronze Brown' },
+    { hex: '#CC7722', name: 'Ochre Spice' },
+  ],
+  spring_warm: [
+    { hex: '#FF6B6B', name: 'Coral Red' },
+    { hex: '#FF8E53', name: 'Sunset Apricot' },
+    { hex: '#FFAB76', name: 'Peach Nectar' },
+    { hex: '#FFD700', name: 'Marigold Yellow' },
+    { hex: '#FFF176', name: 'Butter Yellow' },
+    { hex: '#C8E6C9', name: 'Mint Cream' },
+    { hex: '#A5D6A7', name: 'Pistachio Green' },
+    { hex: '#FFB347', name: 'Apricot Orange' },
+    { hex: '#FF7043', name: 'Papaya Coral' },
+    { hex: '#FFCC02', name: 'Honey Yellow' },
+    { hex: '#F4A460', name: 'Warm Apricot' },
+    { hex: '#DEB887', name: 'Soft Sand' },
+    { hex: '#CD853F', name: 'Caramel Tan' },
+    { hex: '#FFA07A', name: 'Salmon Peach' },
+    { hex: '#FA8072', name: 'Soft Coral' },
+    { hex: '#FF6347', name: 'Tomato Coral' },
+    { hex: '#FF4500', name: 'Poppy Orange' },
+    { hex: '#FFD700', name: 'Golden Sun' },
+    { hex: '#FFDAB9', name: 'Peach Blush' },
+    { hex: '#FFEAA7', name: 'Vanilla Cream' },
+  ],
+  summer_cool: [
+    { hex: '#B39DDB', name: 'Soft Lavender' },
+    { hex: '#9575CD', name: 'Periwinkle' },
+    { hex: '#CE93D8', name: 'Orchid Pink' },
+    { hex: '#F48FB1', name: 'Rose Pink' },
+    { hex: '#F06292', name: 'Cool Raspberry' },
+    { hex: '#80DEEA', name: 'Aqua Mist' },
+    { hex: '#4DD0E1', name: 'Robin Egg Blue' },
+    { hex: '#80CBC4', name: 'Seafoam Teal' },
+    { hex: '#A5D6A7', name: 'Soft Mint' },
+    { hex: '#C5CAE9', name: 'Powder Blue' },
+    { hex: '#7986CB', name: 'Muted Indigo' },
+    { hex: '#64B5F6', name: 'Cornflower Blue' },
+    { hex: '#4FC3F7', name: 'Sky Blue' },
+    { hex: '#E1BEE7', name: 'Lilac Haze' },
+    { hex: '#D1C4E9', name: 'Pale Wisteria' },
+    { hex: '#F8BBD0', name: 'Blush Pink' },
+    { hex: '#FCE4EC', name: 'Petal Pink' },
+    { hex: '#EDE7F6', name: 'Lavender Frost' },
+    { hex: '#E3F2FD', name: 'Ice Blue' },
+    { hex: '#B2EBF2', name: 'Blue Mint' },
+  ],
+  winter_cool: [
+    { hex: '#1A1A2E', name: 'Dark Navy' },
+    { hex: '#16213E', name: 'Midnight Blue' },
+    { hex: '#0F3460', name: 'Royal Navy' },
+    { hex: '#533483', name: 'Deep Violet' },
+    { hex: '#E94560', name: 'Berry Red' },
+    { hex: '#00B4D8', name: 'Electric Aqua' },
+    { hex: '#0077B6', name: 'Cobalt Blue' },
+    { hex: '#023E8A', name: 'Sapphire Blue' },
+    { hex: '#6A0572', name: 'Royal Plum' },
+    { hex: '#9B2226', name: 'Cranberry Wine' },
+    { hex: '#AE2012', name: 'Ruby Red' },
+    { hex: '#BB3E03', name: 'Burnt Vermilion' },
+    { hex: '#CA6702', name: 'Amber Spice' },
+    { hex: '#FFFFFF', name: 'Pure White' },
+    { hex: '#F8F9FA', name: 'Snow White' },
+    { hex: '#E9ECEF', name: 'Silver Mist' },
+    { hex: '#DEE2E6', name: 'Cool Silver' },
+    { hex: '#000000', name: 'Jet Black' },
+    { hex: '#212529', name: 'Charcoal Black' },
+    { hex: '#495057', name: 'Steel Gray' },
+  ],
+}
+
 export type PersonalColorCanvasHandle = {
   exportImage: () => string | null
 }
@@ -317,21 +408,18 @@ function normalizeSwatches(colors: PersonalColorSwatch[]) {
 }
 
 function normalizeSeasonPalette(season: PersonalColorSeason) {
-  const validSeasonColors = uniqueHexes(SEASON_COLORS[season] ?? [])
+  const curatedSeasonColors = normalizeSwatches(SEASON_COLOR_SWATCHES[season] ?? [])
 
-  if (validSeasonColors.length === 0) {
+  if (curatedSeasonColors.length === 0) {
     return Array.from({ length: WHEEL_SLICE_COUNT }, (_, index) => ({
       hex: '#D94D82',
-      name: `Season shade ${String(index + 1).padStart(2, '0')}`,
+      name: 'Rose Pink',
     }))
   }
 
   return Array.from(
     { length: WHEEL_SLICE_COUNT },
-    (_, index) => ({
-      hex: validSeasonColors[index % validSeasonColors.length],
-      name: `Season shade ${String(index + 1).padStart(2, '0')}`,
-    })
+    (_, index) => curatedSeasonColors[index % curatedSeasonColors.length]
   )
 }
 
@@ -348,29 +436,6 @@ function buildWheelSlices(
   ]).slice(0, WHEEL_SLICE_COUNT)
   const safePreferredColors = preferredColors.length > 0 ? preferredColors : seasonPalette
   return safePreferredColors.map((color) => ({ color, isAvoid: false }))
-}
-
-function buildSelectedFamily(selectedHex: string, season: PersonalColorSeason) {
-  if (!isValidHexColor(selectedHex)) {
-    return normalizeSeasonPalette(season)
-  }
-
-  const hsl = hexToHsl(selectedHex)
-
-  if (!hsl) {
-    return normalizeSeasonPalette(season)
-  }
-
-  return Array.from({ length: WHEEL_SLICE_COUNT }, (_, index) => {
-    const position = index / (WHEEL_SLICE_COUNT - 1)
-    const hueShift = (position - 0.5) * 26
-    const saturation = clamp(hsl.s + 12 - position * 18, 38, 96)
-    const lightness = clamp(30 + position * 42, 22, 82)
-    return {
-      hex: hslToHex(hsl.h + hueShift, saturation, lightness),
-      name: `Selected shade ${String(index + 1).padStart(2, '0')}`,
-    }
-  })
 }
 
 const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorCanvasProps>(
@@ -519,6 +584,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       const faceRadius = width * 0.19
       const totalSlices = slices.length
       const sliceAngle = (Math.PI * 2) / totalSlices
+      const tryOnHex = isValidHexColor(selectedHex) ? selectedHex.toUpperCase() : null
       let animationFrameId = 0
 
       const draw = (elapsedMs: number) => {
@@ -549,7 +615,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
           context.moveTo(centerX, centerY)
           context.arc(centerX, centerY, activeRadius, startAngle, endAngle)
           context.closePath()
-          context.fillStyle = slice.color.hex
+          context.fillStyle = tryOnHex ?? slice.color.hex
           context.fill()
         }
 

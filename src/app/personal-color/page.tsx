@@ -9,7 +9,7 @@ import PersonalColorCanvas, {
   type PersonalColorCanvasHandle,
   type PersonalColorSeason,
   type PersonalColorSwatch,
-  SEASON_COLORS,
+  SEASON_COLOR_SWATCHES,
 } from '@/components/PersonalColorCanvas'
 import UpgradeModal from '@/components/UpgradeModal'
 import { createClient } from '@/lib/supabase'
@@ -126,10 +126,7 @@ function buildPageBackground(hex: string) {
 
 function buildCanvasColors(bestColors: PersonalColorSwatch[], season: PersonalColorSeason) {
   const seen = new Set<string>()
-  const seasonColors = (SEASON_COLORS[season] ?? []).map((hex, index) => ({
-    hex,
-    name: `Season shade ${String(index + 1).padStart(2, '0')}`,
-  }))
+  const seasonColors = SEASON_COLOR_SWATCHES[season] ?? []
 
   return [...bestColors, ...seasonColors].filter((color) => {
     const normalizedHex = color.hex?.toUpperCase()
@@ -273,7 +270,7 @@ export default function PersonalColorPage() {
     () => (result ? buildCanvasColors(result.best_colors, result.season) : []),
     [result]
   )
-  const canvasBackground = selectedColor?.hex ?? seasonMeta?.background ?? '#FFF6FB'
+  const canvasBackground = seasonMeta?.background ?? '#FFF6FB'
 
   async function handleShareColors() {
     const exported = canvasRef.current?.exportImage()
@@ -362,7 +359,7 @@ export default function PersonalColorPage() {
     <main
       className="min-h-screen px-5 py-6 md:px-8 md:py-10"
       style={{
-        background: buildPageBackground(selectedColor?.hex ?? seasonMeta.background),
+        background: buildPageBackground(seasonMeta.background),
         color: 'var(--ink)',
         transition: 'background 500ms ease',
       }}

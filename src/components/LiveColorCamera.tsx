@@ -14,6 +14,28 @@ type LiveColorCameraProps = {
 }
 
 const CANVAS_ASPECT_RATIO = 4 / 3
+const FACE_DETECTION_CONFIDENCE = 0.6
+const MAX_MISSED_DETECTION_FRAMES = 18
+
+type FaceCrop = {
+  centerX: number
+  centerY: number
+  radius: number
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function createDefaultVideoCrop(video: HTMLVideoElement): FaceCrop {
+  const sourceSize = Math.min(video.videoWidth, video.videoHeight) * 0.72
+
+  return {
+    centerX: video.videoWidth / 2,
+    centerY: video.videoHeight / 2,
+    radius: sourceSize / 2,
+  }
+}
 
 export default function LiveColorCamera({
   backgroundHex,
@@ -26,13 +48,17 @@ export default function LiveColorCamera({
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const frameRef = useRef<number | null>(null)
+  const detectorRef = useRef<{ detectForVideo: (video: HTMLVideoElement, timestamp: number) => { detections?: Array<{ boundingBox?: { originX?: number, originY?: number, width?: number, height?: number } }> }, close: () => void } | null>(null)
+  const cropRef = useRef<FaceCrop | null>(null)
+  const missedDetectionFramesRef = useRef(0)
   const [cameraState, setCameraState] = useState<'requesting' | 'ready' | 'error'>('requesting')
   const [errorMessage, setErrorMessage] = useState('')
+  const [faceHint, setFaceHint] = useState('')
 
   useEffect(() => {
     let isActive = true
 
-    async function startCamera() {
+    async function startCameraAndDetector() {
       if (!navigator.mediaDevices?.getUserMedia) {
         setCameraState('error')
         setErrorMessage('Camera access required')
@@ -61,10 +87,35 @@ export default function LiveColorCamera({
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
+          cropRef.current = createDefaultVideoCrop(videoRef.current)
         }
+
+        const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision')
+        const vision = await FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm'
+        )
+
+        const detector = await FaceDetector.createFromOptions(vision, {
+          baseOptions: {
+            delegate: 'CPU',
+            modelAssetPath:
+              'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+          },
+          minDetectionConfidence: FACE_DETECTION_CONFIDENCE,
+          runningMode: 'VIDEO',
+        })
+
+        if (!isActive) {
+          detector.close()
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
+
+        detectorRef.current = detector
 
         if (isActive) {
           setCameraState('ready')
+          setFaceHint('')
         }
       } catch {
         if (isActive) {
@@ -74,7 +125,7 @@ export default function LiveColorCamera({
       }
     }
 
-    void startCamera()
+    void startCameraAndDetector()
 
     return () => {
       isActive = false
@@ -83,9 +134,13 @@ export default function LiveColorCamera({
         window.cancelAnimationFrame(frameRef.current)
       }
 
+      detectorRef.current?.close()
+      detectorRef.current = null
       streamRef.current?.getTracks().forEach((track) => track.stop())
       streamRef.current = null
     }
+
+    void startCameraAndDetector()
   }, [])
 
   useEffect(() => {
@@ -104,6 +159,50 @@ export default function LiveColorCamera({
 
     if (!context) {
       return
+    }
+
+    const updateFaceCrop = () => {
+      const detector = detectorRef.current
+
+      if (!detector || video.videoWidth <= 0 || video.videoHeight <= 0) {
+        return
+      }
+
+      try {
+        const result = detector.detectForVideo(video, performance.now())
+        const detection = result.detections?.[0]
+        const box = detection?.boundingBox
+
+        if (!box) {
+          missedDetectionFramesRef.current += 1
+
+          if (missedDetectionFramesRef.current > MAX_MISSED_DETECTION_FRAMES) {
+            cropRef.current = createDefaultVideoCrop(video)
+            setFaceHint('Move a little closer so we can match your color live.')
+          }
+
+          return
+        }
+
+        const width = box.width ?? 0
+        const height = box.height ?? 0
+        const centerX = (box.originX ?? 0) + width / 2
+        const centerY = (box.originY ?? 0) + height / 2
+        const paddedRadius = Math.max(width, height) * 1.15
+        const minRadius = Math.min(video.videoWidth, video.videoHeight) * 0.18
+        const maxRadius = Math.min(video.videoWidth, video.videoHeight) * 0.42
+
+        cropRef.current = {
+          centerX: clamp(centerX, paddedRadius, video.videoWidth - paddedRadius),
+          centerY: clamp(centerY, paddedRadius, video.videoHeight - paddedRadius),
+          radius: clamp(paddedRadius, minRadius, maxRadius),
+        }
+
+        missedDetectionFramesRef.current = 0
+        setFaceHint('')
+      } catch {
+        missedDetectionFramesRef.current += 1
+      }
     }
 
     const drawFrame = () => {
@@ -135,9 +234,25 @@ export default function LiveColorCamera({
       context.fillRect(0, 0, width, height)
 
       if (video.videoWidth > 0 && video.videoHeight > 0) {
-        const sourceSize = Math.min(video.videoWidth, video.videoHeight)
-        const sourceX = (video.videoWidth - sourceSize) / 2
-        const sourceY = (video.videoHeight - sourceSize) / 2
+        updateFaceCrop()
+
+        const fallbackCrop = createDefaultVideoCrop(video)
+        const activeCrop = cropRef.current ?? fallbackCrop
+        const sourceSize = clamp(
+          activeCrop.radius * 2,
+          Math.min(video.videoWidth, video.videoHeight) * 0.35,
+          Math.min(video.videoWidth, video.videoHeight) * 0.84
+        )
+        const sourceX = clamp(
+          activeCrop.centerX - sourceSize / 2,
+          0,
+          Math.max(0, video.videoWidth - sourceSize)
+        )
+        const sourceY = clamp(
+          activeCrop.centerY - sourceSize / 2,
+          0,
+          Math.max(0, video.videoHeight - sourceSize)
+        )
 
         context.save()
         context.beginPath()
@@ -214,6 +329,12 @@ export default function LiveColorCamera({
           <div className="absolute inset-x-6 bottom-24 rounded-[22px] bg-white/88 p-4 text-center shadow-[0_16px_28px_rgba(60,43,57,0.12)]">
             <p className="text-sm font-semibold text-[#2d1b2f]">{errorMessage}</p>
             <p className="mt-1 text-xs text-[#6b5967]">Please enable camera permission to use live try-on.</p>
+          </div>
+        ) : null}
+
+        {cameraState === 'ready' && faceHint ? (
+          <div className="absolute inset-x-6 bottom-24 rounded-[22px] bg-white/82 p-4 text-center text-sm text-[#5f4a61] shadow-[0_16px_28px_rgba(60,43,57,0.12)]">
+            {faceHint}
           </div>
         ) : null}
       </div>
