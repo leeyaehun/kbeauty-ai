@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium, type Page } from 'playwright'
 
 import { embedMissingProducts } from './embed-products'
+import { resolveGlobalSkincareCategory } from './category-utils'
 import {
   USER_AGENT,
   loadExistingProducts,
@@ -285,9 +286,11 @@ async function processCategory(
 
       for (const [url, candidate] of pageCandidates.entries()) {
         if (!categoryCandidates.has(url)) {
+          const resolvedCategory = resolveGlobalSkincareCategory(candidate.name, category.key)
+
           categoryCandidates.set(url, {
             ...candidate,
-            category: category.key,
+            category: resolvedCategory,
           })
         }
       }
@@ -317,7 +320,7 @@ async function processCategory(
         affiliate_url: globalUrl,
         global_affiliate_url: globalUrl,
         brand: candidate.brand,
-        category: category.key,
+        category: candidate.category,
         image_url: candidate.imageUrl,
         ingredient_names: [],
         name: candidate.name,
@@ -327,7 +330,7 @@ async function processCategory(
     )
 
     sessionUrls.add(globalUrl)
-    bumpReport(category.key, action)
+    bumpReport(candidate.category, action)
     processed += 1
 
     if (processed % 25 === 0) {

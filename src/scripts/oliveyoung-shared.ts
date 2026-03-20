@@ -254,11 +254,16 @@ function buildUpdatePayload(
       typeof existing.affiliate_url === 'string' &&
       existing.affiliate_url.length > 0 &&
       !existing.affiliate_url.includes('global.oliveyoung.com')
+    const isSameGlobalProduct =
+      (typeof payload.global_affiliate_url === 'string' &&
+        payload.global_affiliate_url.length > 0 &&
+        existing.global_affiliate_url === payload.global_affiliate_url) ||
+      existing.affiliate_url === payload.affiliate_url
 
     return {
       affiliate_url: hasDomesticAffiliate ? existing.affiliate_url : payload.affiliate_url,
       brand: payload.brand || existing.brand || '',
-      category: existing.category || payload.category,
+      category: isSameGlobalProduct ? payload.category : existing.category || payload.category,
       global_affiliate_url: payload.global_affiliate_url ?? existing.global_affiliate_url ?? payload.affiliate_url,
       image_url: payload.image_url || existing.image_url || '',
       ingredient_names: existing.ingredient_names.length > 0 ? existing.ingredient_names : payload.ingredient_names,

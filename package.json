@@ -17,7 +17,8 @@
     "map:ingredients": "tsx --env-file=.env.local src/scripts/map-ingredients.ts",
     "embed:products": "tsx --env-file=.env.local src/scripts/embed-products.ts",
     "fix:prices": "tsx --env-file=.env.local src/scripts/fix-zero-prices.ts",
-    "fix:global-images": "tsx --env-file=.env.local src/scripts/fix-global-images.ts"
+    "fix:global-images": "tsx --env-file=.env.local src/scripts/fix-global-images.ts",
+    "fix:product-categories": "tsx --env-file=.env.local src/scripts/fix-product-categories.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

@@ -12,7 +12,7 @@ const DEFAULT_CATEGORIES = ['Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask
 const POPULAR_PICK_CATEGORIES = new Set(['Hair', 'Body'])
 const CATEGORY_ALIASES: Record<string, string[]> = {
   Toner: ['Toner', '토너', 'toner'],
-  Moisturizer: ['Moisturizer', 'moisturizer'],
+  Moisturizer: ['Cream', 'cream'],
   Serum: ['Serum', '세럼', 'serum'],
   Cream: ['Cream', '크림', 'cream'],
   'Face Mask': ['Face Mask', '마스크팩', 'mask'],
@@ -91,14 +91,14 @@ async function withQueryTimeout<T>(operation: (signal: AbortSignal) => Promise<T
 
 function resolveSearchCategories(category: string | null) {
   if (category && CATEGORY_ALIASES[category]) {
-    return CATEGORY_ALIASES[category]
+    return [...new Set(CATEGORY_ALIASES[category])]
   }
 
   if (category) {
     return [category]
   }
 
-  return DEFAULT_CATEGORIES.flatMap((entry) => CATEGORY_ALIASES[entry] ?? [entry])
+  return [...new Set(DEFAULT_CATEGORIES.flatMap((entry) => CATEGORY_ALIASES[entry] ?? [entry]))]
 }
 
 function isPopularPickCategory(category: string | null) {
