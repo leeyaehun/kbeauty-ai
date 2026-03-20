@@ -189,6 +189,12 @@ export default function Home() {
               </button>
             </div>
           ) : null}
+
+          <div className="pt-2 text-xs text-[var(--muted)]">
+            <a href="/privacy" className="hover:text-[#d94d82]">Privacy Policy</a>
+            <span className="px-2">·</span>
+            <a href="/terms" className="hover:text-[#d94d82]">Terms of Service</a>
+          </div>
         </section>
       </div>
     </main>

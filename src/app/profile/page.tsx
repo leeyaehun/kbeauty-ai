@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, Crown, Globe2, Heart, LogOut, ScrollText, Sparkles } from 'lucide-react'
+import { ChevronRight, Crown, FileText, Globe2, Heart, LogOut, ScrollText, Shield, Sparkles } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 
 import RegionModal from '@/components/RegionModal'
@@ -324,6 +324,40 @@ export default function ProfilePage() {
                     ? 'Your subscription is currently active.'
                     : 'Unlock personal color analysis and premium features.'}
                 </p>
+              </div>
+            </div>
+            <ChevronRight className="h-5 w-5 text-[var(--muted)]" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push('/privacy')}
+            className="brand-card-soft flex items-center justify-between px-5 py-5 text-left"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff0f5] text-[#d94d82]">
+                <Shield className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-[var(--ink)]">Privacy Policy</p>
+                <p className="mt-1 text-sm text-[var(--muted)]">See how we handle your photos, data, and analysis history.</p>
+              </div>
+            </div>
+            <ChevronRight className="h-5 w-5 text-[var(--muted)]" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push('/terms')}
+            className="brand-card-soft flex items-center justify-between px-5 py-5 text-left"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff0f5] text-[#d94d82]">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-[var(--ink)]">Terms of Service</p>
+                <p className="mt-1 text-sm text-[var(--muted)]">Review the terms that apply to your use of K-Beauty AI.</p>
               </div>
             </div>
             <ChevronRight className="h-5 w-5 text-[var(--muted)]" />
