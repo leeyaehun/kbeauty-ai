@@ -1,6 +1,7 @@
 const GLOBAL_CATEGORY_KEYS = new Set([
   'serum',
   'cream',
+  'moisturizer',
   'toner',
   'cleanser',
   'sun_care',
