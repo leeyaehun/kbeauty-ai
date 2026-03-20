@@ -60,6 +60,14 @@ export default function TopNav() {
   const showBackButton = pathname !== '/'
   const avatarUrl = getUserAvatar(user)
   const userName = getUserName(user)
+  const handleBack = () => {
+    if (pathname === '/care') {
+      router.push('/recommend')
+      return
+    }
+
+    router.back()
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-[rgba(255,107,157,0.18)] bg-white/95 backdrop-blur-xl">
@@ -68,7 +76,7 @@ export default function TopNav() {
           {showBackButton ? (
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={handleBack}
               className="flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(255,107,157,0.14)] bg-[#fff7fb] text-[#d94d82] transition hover:border-[rgba(255,107,157,0.3)] hover:bg-white"
               aria-label="Go back"
             >
