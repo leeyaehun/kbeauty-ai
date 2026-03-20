@@ -48,9 +48,10 @@ export type ProductCardProps = {
   displayPrice: string | null
   explanation: string
   imageUrl: string | null
-  matchScore: number
+  matchScore?: number | null
   name: string
   productAction?: ReactNode
+  showMatchScore?: boolean
 }
 
 export default function ProductCard({
@@ -64,7 +65,11 @@ export default function ProductCard({
   matchScore,
   name,
   productAction,
+  showMatchScore = true,
 }: ProductCardProps) {
+  const shouldShowMatchScore = showMatchScore && typeof matchScore === 'number'
+  const shouldShowFooter = shouldShowMatchScore || Boolean(displayAffiliateUrl)
+
   return (
     <div className="brand-card overflow-hidden p-6 md:p-7">
       <div className="flex flex-col gap-5">
@@ -107,32 +112,40 @@ export default function ProductCard({
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-[rgba(255,107,157,0.12)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(255,240,245,0.92))] p-4 shadow-[0_16px_28px_rgba(149,64,109,0.08)]">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-[var(--muted)]">Match score</span>
-            <span className="text-lg font-semibold text-[#d94d82]">
-              {matchScore}%
-            </span>
-          </div>
+        {shouldShowFooter ? (
+          <div className="rounded-[24px] border border-[rgba(255,107,157,0.12)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(255,240,245,0.92))] p-4 shadow-[0_16px_28px_rgba(149,64,109,0.08)]">
+            {shouldShowMatchScore ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-[var(--muted)]">Match score</span>
+                  <span className="text-lg font-semibold text-[#d94d82]">
+                    {matchScore}%
+                  </span>
+                </div>
 
-          <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
-            <div
-              className="h-full rounded-full bg-[linear-gradient(90deg,#ff6b9d,#f6deb1)]"
-              style={{ width: `${matchScore}%` }}
-            />
-          </div>
+                <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
+                  <div
+                    className="h-full rounded-full bg-[linear-gradient(90deg,#ff6b9d,#f6deb1)]"
+                    style={{ width: `${matchScore}%` }}
+                  />
+                </div>
+              </>
+            ) : null}
 
-          {displayAffiliateUrl && (
-            <a
-              href={displayAffiliateUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="brand-button-primary mt-4 block w-full px-5 py-3 text-center font-semibold"
-            >
-              {displayButtonLabel}
-            </a>
-          )}
-        </div>
+            {displayAffiliateUrl && (
+              <a
+                href={displayAffiliateUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`brand-button-primary block w-full px-5 py-3 text-center font-semibold ${
+                  shouldShowMatchScore ? 'mt-4' : ''
+                }`}
+              >
+                {displayButtonLabel}
+              </a>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   )

@@ -7,6 +7,13 @@ import type { User } from '@supabase/supabase-js'
 
 import ProductCard from '@/components/ProductCard'
 import ToastMessage from '@/components/ToastMessage'
+import {
+  CARE_SUBCATEGORIES,
+  getCareExplanation,
+  getDefaultCareSubcategory,
+  type CareCategory,
+  type CareSubcategory,
+} from '@/lib/care'
 import { getProductPricePresentation, type PriceCurrencyCode } from '@/lib/pricing'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
@@ -51,11 +58,12 @@ type Product = {
   image_url: string | null
   price_minor_unit?: boolean
   skin_profile: any
-  similarity: number
+  similarity?: number | null
   explanation?: string
   display_affiliate_url?: string | null
   display_link_region?: Region
   display_button_label?: string
+  subcategory?: string | null
 }
 
 type Region = ShoppingRegion
@@ -72,6 +80,24 @@ function getDisplayPrice(product: Product) {
   return product.display_price ?? getProductPricePresentation(product.price, product.category).displayPrice
 }
 
+function withRegionAwareDisplay(product: Product, region: Region, buttonLabel?: string) {
+  if (region === 'global') {
+    return {
+      ...product,
+      display_affiliate_url: product.global_affiliate_url ?? product.affiliate_url,
+      display_link_region: 'global' as const,
+      display_button_label: buttonLabel ?? 'Shop on Olive Young Global',
+    }
+  }
+
+  return {
+    ...product,
+    display_affiliate_url: product.affiliate_url,
+    display_link_region: 'korea' as const,
+    display_button_label: buttonLabel ?? 'Shop on Olive Young Korea',
+  }
+}
+
 export default function RecommendPage() {
   const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
@@ -84,8 +110,14 @@ export default function RecommendPage() {
   const [user, setUser] = useState<User | null>(null)
   const [wishlistIds, setWishlistIds] = useState<Set<string>>(new Set())
   const [pendingWishlistIds, setPendingWishlistIds] = useState<Set<string>>(new Set())
+  const [careCategory, setCareCategory] = useState<CareCategory>('Hair')
+  const [careSubcategory, setCareSubcategory] = useState<CareSubcategory>(getDefaultCareSubcategory('Hair'))
+  const [careProducts, setCareProducts] = useState<Product[]>([])
+  const [careLoading, setCareLoading] = useState(true)
+  const [careError, setCareError] = useState('')
 
   const categories = ['Cleanser', 'Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Sun Care', 'Hair', 'Body']
+  const careCategories = Object.keys(CARE_SUBCATEGORIES) as CareCategory[]
 
   useEffect(() => {
     const supabase = createClient()
@@ -122,6 +154,10 @@ export default function RecommendPage() {
     const timeoutId = window.setTimeout(() => setToastMessage(''), 2000)
     return () => window.clearTimeout(timeoutId)
   }, [toastMessage])
+
+  useEffect(() => {
+    setCareSubcategory(getDefaultCareSubcategory(careCategory))
+  }, [careCategory])
 
   useEffect(() => {
     let isActive = true
@@ -264,23 +300,7 @@ export default function RecommendPage() {
         }
 
         const regionAwareProducts = ((data.products ?? []) as Product[])
-          .map(product => {
-            if (region === 'global') {
-              return {
-                ...product,
-                display_affiliate_url: product.global_affiliate_url ?? product.affiliate_url,
-                display_link_region: 'global' as const,
-                display_button_label: 'Shop on Olive Young Global',
-              }
-            }
-
-            return {
-              ...product,
-              display_affiliate_url: product.affiliate_url,
-              display_link_region: 'korea' as const,
-              display_button_label: 'Shop on Olive Young Korea',
-            }
-          })
+          .map((product) => withRegionAwareDisplay(product, region))
           .filter(product => Boolean(product.display_affiliate_url))
           .sort((left, right) => {
             if (region !== 'global') {
@@ -333,6 +353,58 @@ export default function RecommendPage() {
       isActive = false
     }
   }, [regionReady, region, router, selectedCategory])
+
+  useEffect(() => {
+    let isActive = true
+
+    async function fetchCareProducts() {
+      if (!regionReady) {
+        return
+      }
+
+      setCareLoading(true)
+      setCareError('')
+
+      try {
+        const params = new URLSearchParams({
+          category: careCategory,
+          subcategory: careSubcategory,
+          region,
+        })
+        const res = await fetch(`/api/care?${params.toString()}`, { cache: 'no-store' })
+        const data = await res.json()
+
+        if (!res.ok) {
+          if (isActive) {
+            setCareError(data.error || 'Failed to load care products.')
+          }
+          return
+        }
+
+        const nextProducts = ((data.products ?? []) as Product[])
+          .map((product) => withRegionAwareDisplay(product, region, 'Shop on Olive Young'))
+          .filter((product) => Boolean(product.display_affiliate_url))
+
+        if (isActive) {
+          setCareProducts(nextProducts)
+        }
+      } catch {
+        if (isActive) {
+          setCareError('A network error occurred while loading care products.')
+        }
+      } finally {
+        if (isActive) {
+          setCareLoading(false)
+        }
+      }
+    }
+
+    void fetchCareProducts()
+
+    return () => {
+      isActive = false
+    }
+  }, [careCategory, careSubcategory, region, regionReady])
 
   if (loading) {
     return (
@@ -464,6 +536,108 @@ export default function RecommendPage() {
             })
           )}
         </div>
+
+        <section className="mt-12 border-t border-[rgba(255,107,157,0.14)] pt-10">
+          <div className="mb-6">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Hair &amp; Body Care</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+              Browse by concern
+            </h2>
+          </div>
+
+          <div className="-mx-1 mb-4 flex gap-3 overflow-x-auto px-1 pb-3">
+            {careCategories.map((category) => (
+              <button
+                key={category}
+                type="button"
+                onClick={() => setCareCategory(category)}
+                className={`shrink-0 whitespace-nowrap rounded-full px-5 py-3 text-sm font-semibold transition-all ${
+                  careCategory === category
+                    ? 'bg-[#ff6b9d] text-white shadow-[0_16px_28px_rgba(217,77,130,0.22)]'
+                    : 'border border-[rgba(255,107,157,0.16)] bg-white/85 text-[var(--muted-strong)]'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
+          <div className="-mx-1 mb-6 flex gap-3 overflow-x-auto px-1 pb-3">
+            {CARE_SUBCATEGORIES[careCategory].map((subcategory) => (
+              <button
+                key={subcategory}
+                type="button"
+                onClick={() => setCareSubcategory(subcategory)}
+                className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                  careSubcategory === subcategory
+                    ? 'bg-[#ffe1eb] text-[#d94d82] shadow-[0_12px_24px_rgba(217,77,130,0.12)]'
+                    : 'border border-[rgba(255,107,157,0.14)] bg-white/90 text-[var(--muted-strong)]'
+                }`}
+              >
+                {subcategory}
+              </button>
+            ))}
+          </div>
+
+          {careLoading ? (
+            <div className="brand-card p-8 text-center">
+              <h3 className="text-xl font-semibold tracking-[-0.03em] text-[var(--ink)]">
+                Loading care picks
+              </h3>
+              <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
+                Pulling Olive Young products for {careSubcategory.toLowerCase()}.
+              </p>
+            </div>
+          ) : careError ? (
+            <div className="brand-card p-8 text-center">
+              <h3 className="text-xl font-semibold tracking-[-0.03em] text-[var(--ink)]">
+                Hair &amp; Body products are unavailable
+              </h3>
+              <p className="mt-3 text-sm leading-7 text-[var(--muted)]">{careError}</p>
+            </div>
+          ) : careProducts.length === 0 ? (
+            <div className="brand-card p-8 text-center">
+              <h3 className="text-xl font-semibold tracking-[-0.03em] text-[var(--ink)]">
+                No products found for this concern
+              </h3>
+              <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
+                Try another concern tab to browse more Hair &amp; Body options.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-5">
+              {careProducts.map((product) => (
+                <ProductCard
+                  key={`care-${product.id}`}
+                  brand={product.brand}
+                  categoryLabel={product.subcategory ?? careSubcategory}
+                  displayAffiliateUrl={product.display_affiliate_url}
+                  displayButtonLabel={product.display_button_label}
+                  displayPrice={getDisplayPrice(product)}
+                  explanation={getCareExplanation(careCategory, (product.subcategory as CareSubcategory | null) ?? careSubcategory)}
+                  imageUrl={product.image_url}
+                  name={product.name}
+                  showMatchScore={false}
+                  productAction={(
+                    <button
+                      type="button"
+                      onClick={() => handleWishlistToggle(product.id)}
+                      disabled={pendingWishlistIds.has(product.id)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(255,107,157,0.16)] bg-white/90 transition hover:border-[rgba(255,107,157,0.34)] disabled:opacity-70"
+                      aria-label={wishlistIds.has(product.id) ? 'Remove from wishlist' : 'Add to wishlist'}
+                    >
+                      <Heart
+                        className="h-5 w-5"
+                        fill={wishlistIds.has(product.id) ? '#FF6B9D' : 'none'}
+                        color={wishlistIds.has(product.id) ? '#FF6B9D' : '#9ca3af'}
+                      />
+                    </button>
+                  )}
+                />
+              ))}
+            </div>
+          )}
+        </section>
 
         <div className="brand-card mt-6 p-6 text-center">
           <p className="text-lg font-semibold text-[var(--ink)]">K-Beauty AI Membership</p>
