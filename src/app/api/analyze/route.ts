@@ -80,9 +80,6 @@ function normalizeAnalysisResult(parsed: any) {
       ? parsed.concerns.filter((item: unknown) => typeof item === 'string')
       : [],
     skin_tone: typeof parsed.skin_tone === 'string' ? parsed.skin_tone : 'medium',
-    confidence: typeof parsed.confidence === 'number'
-      ? Math.max(0, Math.min(1, parsed.confidence))
-      : 0.5,
   }
 }
 
@@ -123,8 +120,7 @@ JSON format:
     "pigmentation": 0-100
   },
   "concerns": ["acne"|"hyperpigmentation"|"wrinkles"|"pores"|"redness"|"dryness"],
-  "skin_tone": "fair|medium|tan|deep",
-  "confidence": 0-1
+  "skin_tone": "fair|medium|tan|deep"
 }`
           },
           {

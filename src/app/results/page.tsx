@@ -35,7 +35,6 @@ type AnalysisResult = {
   }
   concerns: string[]
   skin_tone: string
-  confidence: number
 }
 
 function safeParseSessionStorage<T>(key: string, fallback: T) {
@@ -265,12 +264,6 @@ export default function ResultsPage() {
                 A soft synthesis of image analysis and your survey answers, designed to reflect how your skin behaves in real life.
               </p>
 
-              <div className="mt-8 rounded-[26px] border border-[rgba(200,155,60,0.24)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(246,222,177,0.42))] p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c89b3c]">Confidence</p>
-                <p className="mt-2 text-3xl font-semibold text-[var(--ink)]">
-                  {Math.round(result.confidence * 100)}%
-                </p>
-              </div>
             </div>
 
             {result.concerns.length > 0 && (
