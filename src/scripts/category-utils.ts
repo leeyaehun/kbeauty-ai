@@ -22,8 +22,122 @@ export function isGlobalOliveYoungUrl(url: string | null | undefined) {
   return typeof url === 'string' && url.includes('global.oliveyoung.com/')
 }
 
+export function parseGlobalProductIdFromUrl(url: string | null | undefined) {
+  if (typeof url !== 'string' || url.length === 0) {
+    return null
+  }
+
+  try {
+    const parsed = new URL(url)
+    const prdtNo = parsed.searchParams.get('prdtNo')
+    return prdtNo && prdtNo.length > 0 ? prdtNo : null
+  } catch {
+    return null
+  }
+}
+
 function hasAnyKeyword(value: string, patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(value))
+}
+
+function decodeGlobalCategoryPath(value: string) {
+  return value
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function mapGlobalCategoryPathToCategory(value: string | null | undefined) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null
+  }
+
+  const normalized = decodeGlobalCategoryPath(value)
+
+  if (
+    normalized.includes('> Essence & Serum') ||
+    normalized.includes('> 에센스') ||
+    normalized.includes('> 세럼')
+  ) {
+    return 'serum' as const
+  }
+
+  if (
+    normalized.includes('> Face Masks') ||
+    normalized.includes('> 마스크') ||
+    normalized.includes('> 패드')
+  ) {
+    return 'mask' as const
+  }
+
+  if (normalized.includes('> Suncare') || normalized.includes('> 선케어')) {
+    return 'sun_care' as const
+  }
+
+  if (
+    normalized.includes('> Cleansers') ||
+    normalized.includes('> 클렌저') ||
+    normalized.includes('> 클렌징')
+  ) {
+    return 'cleanser' as const
+  }
+
+  if (normalized.includes('> Toner') || normalized.includes('> 토너')) {
+    return 'toner' as const
+  }
+
+  if (normalized.includes('> Eye Care') || normalized.includes('> 아이 케어')) {
+    return 'eye_cream' as const
+  }
+
+  if (
+    normalized.includes('> Moisturizers > Cream') ||
+    normalized.includes('> 모이스처라이저 > 크림')
+  ) {
+    return 'cream' as const
+  }
+
+  if (
+    normalized.includes('> Moisturizers') ||
+    normalized.includes('> 모이스처라이저') ||
+    normalized.includes('> 로션') ||
+    normalized.includes('> 에멀전') ||
+    normalized.includes('> 미스트') ||
+    normalized.includes('> 페이스 오일') ||
+    normalized.includes('> 올인원')
+  ) {
+    return 'moisturizer' as const
+  }
+
+  if (
+    normalized.includes('> Hair') ||
+    normalized.includes('> Bath & Body') ||
+    normalized.includes('> Wellness') ||
+    normalized.includes('> Men`s Care') ||
+    normalized.includes('> 건강/위생') ||
+    normalized.includes('> 헤어') ||
+    normalized.includes('> 바디') ||
+    normalized.includes('> 핸드') ||
+    normalized.includes('> 풋') ||
+    normalized.includes('> 발 관리')
+  ) {
+    return 'body_hair' as const
+  }
+
+  if (
+    normalized.includes('> Makeup') ||
+    normalized.includes('> 메이크업') ||
+    normalized.includes('> 페이스') ||
+    normalized.includes('> 립') ||
+    normalized.includes('> 아이') ||
+    normalized.includes('> 브러시') ||
+    normalized.includes('> 도구')
+  ) {
+    return 'foundation' as const
+  }
+
+  return null
 }
 
 export function detectTonerKeyword(value: string) {

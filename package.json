@@ -19,7 +19,8 @@
     "fix:prices": "tsx --env-file=.env.local src/scripts/fix-zero-prices.ts",
     "fix:global-images": "tsx --env-file=.env.local src/scripts/fix-global-images.ts",
     "fix:product-categories": "tsx --env-file=.env.local src/scripts/fix-product-categories.ts",
-    "fix:global-moisturizers": "tsx --env-file=.env.local src/scripts/fix-global-moisturizer-categories.ts"
+    "fix:global-moisturizers": "tsx --env-file=.env.local src/scripts/fix-global-moisturizer-categories.ts",
+    "fix:global-serum-categories": "tsx --env-file=.env.local src/scripts/fix-global-serum-categories.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

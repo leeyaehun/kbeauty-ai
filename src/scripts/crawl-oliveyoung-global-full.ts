@@ -5,6 +5,7 @@ import { chromium, type Page } from 'playwright'
 
 import { embedMissingProducts } from './embed-products'
 import { resolveGlobalSkincareCategory } from './category-utils'
+import { fetchGlobalProductCategoryPath } from './global-oliveyoung-detail'
 import {
   USER_AGENT,
   loadExistingProducts,
@@ -287,7 +288,21 @@ async function processCategory(
 
       for (const [url, candidate] of pageCandidates.entries()) {
         if (!categoryCandidates.has(url)) {
-          const resolvedCategory = resolveGlobalSkincareCategory(candidate.name, category.key)
+          let resolvedCategory = resolveGlobalSkincareCategory(candidate.name, category.key)
+
+          if (category.key === 'serum') {
+            try {
+              const detailCategory = await fetchGlobalProductCategoryPath(candidate.affiliateUrl)
+
+              if (detailCategory.category) {
+                resolvedCategory = detailCategory.category
+              }
+            } catch (error) {
+              console.warn(
+                `[${category.label}] detail-data category lookup failed for ${candidate.name}: ${String(error)}`
+              )
+            }
+          }
 
           categoryCandidates.set(url, {
             ...candidate,
