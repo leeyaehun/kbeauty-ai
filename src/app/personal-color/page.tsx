@@ -7,7 +7,6 @@ import PersonalColorCanvas, {
   type PersonalColorCanvasHandle,
   type PersonalColorSeason,
   type PersonalColorSwatch,
-  SEASON_COLORS,
 } from '@/components/PersonalColorCanvas'
 import UpgradeModal from '@/components/UpgradeModal'
 import { createClient } from '@/lib/supabase'
@@ -240,7 +239,6 @@ export default function PersonalColorPage() {
     () => (result ? result.product_recommendations[activeTab] : null),
     [activeTab, result]
   )
-  const tryColors = result ? SEASON_COLORS[result.season] : []
   const canvasBackground = selectedColor ?? seasonMeta?.background ?? '#FFF6FB'
 
   async function handleShareColors() {
@@ -361,45 +359,20 @@ export default function PersonalColorPage() {
               backgroundHex={canvasBackground}
               bestColors={result.best_colors}
               imageData={capturedImage}
+              onColorSelect={setSelectedColor}
               selectedHex={selectedColor}
               season={result.season}
             />
-          </div>
-        </section>
 
-        <section className="mt-6 rounded-[34px] border border-white/70 bg-white/62 p-6 shadow-[0_24px_60px_rgba(60,43,57,0.1)] backdrop-blur-xl">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8c6d72]">Try a color</p>
-              <p className="mt-2 text-sm text-[#5f4a61]">Tap a shade to tint the canvas behind your portrait.</p>
-            </div>
             <button
               onClick={() => {
                 setSelectedColor(null)
                 setWheelAnimationVersion((value) => value + 1)
               }}
-              className="rounded-full border border-[#2d1b2f]/12 bg-white/84 px-5 py-3 text-sm font-semibold text-[#5f4a61] transition hover:translate-y-[-1px]"
+              className="mt-5 w-full rounded-full bg-[#FF6B9D] px-5 py-4 text-sm font-semibold text-white transition hover:translate-y-[-1px] hover:bg-[#e8588a]"
             >
               Reset to my colors
             </button>
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-3">
-            {tryColors.map((hex) => {
-              const isActive = selectedColor === hex
-
-              return (
-                <button
-                  key={hex}
-                  onClick={() => setSelectedColor(hex)}
-                  className={`h-11 w-11 rounded-full transition duration-200 hover:scale-105 ${
-                    isActive ? 'ring-3 ring-white ring-offset-2 ring-offset-[#2d1b2f]/10' : ''
-                  }`}
-                  style={{ backgroundColor: hex }}
-                  aria-label={`Try color ${hex}`}
-                />
-              )
-            })}
           </div>
         </section>
 

@@ -52,6 +52,7 @@ type PersonalColorCanvasProps = {
   backgroundHex: string
   bestColors: PersonalColorSwatch[]
   imageData: string
+  onColorSelect?: (hex: string) => void
   selectedHex: string | null
   season: PersonalColorSeason
 }
@@ -370,6 +371,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       backgroundHex,
       bestColors,
       imageData,
+      onColorSelect,
       selectedHex,
       season,
     },
@@ -432,6 +434,48 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
     useEffect(() => {
       hasAnimatedRef.current = false
     }, [animateVersion])
+
+    useEffect(() => {
+      const canvas = canvasRef.current
+
+      if (!canvas || !canvasWidth || !onColorSelect) {
+        return
+      }
+
+      const width = canvasWidth
+      const height = Math.round(canvasWidth * PORTRAIT_CANVAS_HEIGHT_RATIO)
+      const centerX = width / 2
+      const centerY = height / 2
+      const outerRadius = Math.max(width, height) * 0.82
+      const faceRadius = width * 0.19
+      const slices = buildWheelSlices(season, bestColors, avoidColors, selectedHex)
+      const sliceAngle = (Math.PI * 2) / slices.length
+
+      const handleCanvasClick = (event: MouseEvent) => {
+        const bounds = canvas.getBoundingClientRect()
+        const offsetX = event.clientX - bounds.left
+        const offsetY = event.clientY - bounds.top
+        const distance = Math.hypot(offsetX - centerX, offsetY - centerY)
+
+        if (distance < faceRadius || distance > outerRadius || slices.length === 0) {
+          return
+        }
+
+        const angle = (Math.atan2(offsetY - centerY, offsetX - centerX) + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2)
+        const sliceIndex = Math.min(slices.length - 1, Math.floor(angle / sliceAngle))
+        const selectedSlice = slices[sliceIndex]
+
+        if (selectedSlice) {
+          onColorSelect(selectedSlice.hex)
+        }
+      }
+
+      canvas.addEventListener('click', handleCanvasClick)
+
+      return () => {
+        canvas.removeEventListener('click', handleCanvasClick)
+      }
+    }, [avoidColors, bestColors, canvasWidth, onColorSelect, season, selectedHex])
 
     useEffect(() => {
       const canvas = canvasRef.current
@@ -564,7 +608,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       <div ref={containerRef} className="mx-auto w-[84vw] max-w-[500px] md:w-full md:max-w-[560px]">
         <canvas
           ref={canvasRef}
-          className="w-full rounded-[28px] shadow-[0_22px_52px_rgba(45,27,47,0.16)]"
+          className="w-full cursor-pointer rounded-[28px] shadow-[0_22px_52px_rgba(45,27,47,0.16)]"
           style={{ aspectRatio: '3 / 4' }}
         />
       </div>
