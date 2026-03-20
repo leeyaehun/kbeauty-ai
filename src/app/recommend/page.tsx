@@ -18,6 +18,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   'Sun Care': 'Sun Care',
   Hair: 'Hair',
   Body: 'Body',
+  moisturizer: 'Moisturizer',
   세럼: 'Serum',
   크림: 'Cream',
   토너: 'Toner',

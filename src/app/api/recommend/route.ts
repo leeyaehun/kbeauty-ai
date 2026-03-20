@@ -12,9 +12,8 @@ const MAX_VECTOR_CANDIDATES = 2500
 const DEFAULT_REGION: ShoppingRegion = 'korea'
 const DEFAULT_CATEGORIES = ['Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Cleanser', 'Sun Care', 'Hair', 'Body']
 const POPULAR_PICK_CATEGORIES = new Set(['Hair', 'Body'])
-const CATEGORY_ALIASES: Record<string, string[]> = {
+const BASE_CATEGORY_ALIASES: Record<string, string[]> = {
   Toner: ['Toner', '토너', 'toner'],
-  Moisturizer: ['Cream', 'cream'],
   Serum: ['Serum', '세럼', 'serum'],
   Cream: ['Cream', '크림', 'cream'],
   'Face Mask': ['Face Mask', '마스크팩', 'mask'],
@@ -83,6 +82,13 @@ function applyRegionFilter<T extends {
     : query.like('affiliate_url', '%oliveyoung.co.kr%')
 }
 
+function getCategoryAliases(region: ProductRegion): Record<string, string[]> {
+  return {
+    ...BASE_CATEGORY_ALIASES,
+    Moisturizer: region === 'global' ? ['Moisturizer', 'moisturizer'] : ['Cream', 'cream'],
+  }
+}
+
 function createServiceRoleSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -110,16 +116,18 @@ async function withQueryTimeout<T>(operation: (signal: AbortSignal) => Promise<T
   }
 }
 
-function resolveSearchCategories(category: string | null) {
-  if (category && CATEGORY_ALIASES[category]) {
-    return [...new Set(CATEGORY_ALIASES[category])]
+function resolveSearchCategories(category: string | null, region: ProductRegion) {
+  const categoryAliases = getCategoryAliases(region)
+
+  if (category && categoryAliases[category]) {
+    return [...new Set(categoryAliases[category])]
   }
 
   if (category) {
     return [category]
   }
 
-  return [...new Set(DEFAULT_CATEGORIES.flatMap((entry) => CATEGORY_ALIASES[entry] ?? [entry]))]
+  return [...new Set(DEFAULT_CATEGORIES.flatMap((entry) => categoryAliases[entry] ?? [entry]))]
 }
 
 function isPopularPickCategory(category: string | null) {
@@ -412,7 +420,7 @@ export async function POST(req: NextRequest) {
 
     const selectedCategory = typeof category === 'string' ? category : null
     const selectedRegion = normalizeRegion(region)
-    const searchCategories = resolveSearchCategories(selectedCategory)
+    const searchCategories = resolveSearchCategories(selectedCategory, selectedRegion)
     const supabase = createServiceRoleSupabaseClient()
 
     if (isPopularPickCategory(selectedCategory)) {

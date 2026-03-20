@@ -20,6 +20,7 @@ const SEARCH_URL = 'https://global.oliveyoung.com/display/search'
 const GLOBAL_CATEGORIES = [
   { key: 'serum', label: 'Serum', queries: ['serum', 'ampoule'] },
   { key: 'cream', label: 'Cream', queries: ['cream'] },
+  { key: 'moisturizer', label: 'Moisturizer', queries: ['moisturizer', 'lotion', 'emulsion', 'all in one'] },
   { key: 'toner', label: 'Toner', queries: ['toner'] },
   { key: 'cleanser', label: 'Cleanser', queries: ['cleanser'] },
   { key: 'sun_care', label: 'Sun Care', queries: ['sun care', 'sunscreen'] },
