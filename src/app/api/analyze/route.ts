@@ -86,6 +86,15 @@ function normalizeAnalysisResult(parsed: any) {
   }
 }
 
+function isNoFaceResult(parsed: unknown): parsed is { error: 'no_face' } {
+  return Boolean(
+    parsed &&
+    typeof parsed === 'object' &&
+    'error' in parsed &&
+    parsed.error === 'no_face'
+  )
+}
+
 async function requestVisionAnalysis(openai: OpenAI, base64Data: string, surveyAnswers: any) {
   let lastError: Error | null = null
 
@@ -100,7 +109,10 @@ async function requestVisionAnalysis(openai: OpenAI, base64Data: string, surveyA
           {
             role: 'system',
             content: `You are a skincare analysis AI with strong K-beauty expertise.
-Analyze the face in the image and return ONLY a JSON object, with no extra text.
+First check if there is a human face in the image.
+If no face is detected, return: { "error": "no_face" }
+If face is detected, proceed with skin analysis.
+Return ONLY a JSON object, with no extra text.
 JSON format:
 {
   "skin_type": "dry|oily|combination|sensitive|normal",
@@ -173,7 +185,13 @@ export async function POST(req: NextRequest) {
     const response = await requestVisionAnalysis(openai, base64Data, surveyAnswers)
     const text = extractMessageText(response.choices[0]?.message?.content)
     const jsonText = extractJsonString(text)
-    const analysisResult = normalizeAnalysisResult(JSON.parse(jsonText))
+    const parsedResult = JSON.parse(jsonText)
+
+    if (isNoFaceResult(parsedResult)) {
+      return NextResponse.json(parsedResult, { status: 422 })
+    }
+
+    const analysisResult = normalizeAnalysisResult(parsedResult)
 
     if (surveyAnswers) {
       const surveyDry = Number(surveyAnswers.tightness ?? 0) / 3

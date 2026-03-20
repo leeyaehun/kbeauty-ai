@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 const MEDIAPIPE_CPU_INFO_LOG = 'INFO: Created TensorFlow Lite XNNPACK delegate for CPU.'
 const MAX_CAPTURE_BYTES = 1024 * 1024
+const MIN_FACE_DETECTION_CONFIDENCE = 0.6
 const MEDIAPIPE_GPU_FALLBACK_LOG_PATTERNS = [
   'StartGraph failed: INTERNAL: Service "kGpuService"',
   'emscripten_webgl_create_context() returned error 0',
@@ -206,7 +207,7 @@ export default function AnalyzePage() {
               delegate
             },
             runningMode: 'VIDEO',
-            minDetectionConfidence: 0.3,
+            minDetectionConfidence: MIN_FACE_DETECTION_CONFIDENCE,
           })
         )
       }
@@ -287,9 +288,12 @@ export default function AnalyzePage() {
 
         try {
           const results = detector.detectForVideo(video, Date.now())
-          const confidence = results.detections[0]?.categories?.[0]?.score ?? 0
-          console.debug('Face detection confidence:', confidence)
-          const detected = results.detections.length > 0
+          const highestConfidence = results.detections.reduce((maxConfidence, detection) => {
+            const score = detection.categories?.[0]?.score ?? 0
+            return Math.max(maxConfidence, score)
+          }, 0)
+          console.debug('Face detection confidence:', highestConfidence)
+          const detected = highestConfidence >= MIN_FACE_DETECTION_CONFIDENCE
           setFaceDetected(detected)
           if (detected) setStatus('detected')
           else setStatus('ready')
@@ -323,6 +327,7 @@ export default function AnalyzePage() {
   }, [cameraReady])
 
   const capture = useCallback(async () => {
+    if (!faceDetected || isCapturing) return
     if (!videoRef.current || !canvasRef.current) return
 
     try {
@@ -359,7 +364,7 @@ export default function AnalyzePage() {
     } finally {
       setIsCapturing(false)
     }
-  }, [router])
+  }, [faceDetected, isCapturing, router])
 
   return (
     <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
@@ -434,6 +439,7 @@ export default function AnalyzePage() {
             <button
               onClick={capture}
               disabled={!faceDetected || isCapturing}
+              aria-disabled={!faceDetected || isCapturing}
               className={`mt-8 w-full py-4 font-semibold ${
                 faceDetected && !isCapturing
                   ? 'brand-button-primary'
@@ -444,7 +450,7 @@ export default function AnalyzePage() {
             </button>
 
             <p className="mt-4 text-center text-sm text-[var(--muted)]">
-              {faceDetected ? 'You are all set for your skin survey.' : 'If detection feels slow, step closer and avoid backlight.'}
+              {faceDetected ? 'You are all set for your skin survey.' : 'Position your face in the frame to continue'}
             </p>
             {captureError && (
               <p className="mt-3 text-center text-sm text-[#d94d82]">{captureError}</p>

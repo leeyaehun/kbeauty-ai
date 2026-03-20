@@ -66,6 +66,18 @@ async function parseJsonResponse(response: Response) {
   }
 }
 
+function getAnalyzeErrorMessage(error: unknown, status?: number) {
+  if (error === 'no_face') {
+    return 'No face detected. Please retake your photo.'
+  }
+
+  if (typeof error === 'string') {
+    return error
+  }
+
+  return `The analysis request failed. (HTTP ${status})`
+}
+
 async function fetchAnalyzeWithRetry(imageBase64: string, surveyAnswers: Record<string, number>) {
   let lastError: Error | null = null
 
@@ -87,9 +99,7 @@ async function fetchAnalyzeWithRetry(imageBase64: string, surveyAnswers: Record<
       const data = await parseJsonResponse(response)
 
       if (!response.ok) {
-        const message = typeof data.error === 'string'
-          ? data.error
-          : `The analysis request failed. (HTTP ${response.status})`
+        const message = getAnalyzeErrorMessage(data.error, response.status)
 
         if (attempt < ANALYZE_MAX_RETRIES && response.status >= 500) {
           lastError = new Error(message)
@@ -97,6 +107,10 @@ async function fetchAnalyzeWithRetry(imageBase64: string, surveyAnswers: Record<
         }
 
         throw new Error(message)
+      }
+
+      if (data?.error === 'no_face') {
+        throw new Error(getAnalyzeErrorMessage(data.error, response.status))
       }
 
       return data
