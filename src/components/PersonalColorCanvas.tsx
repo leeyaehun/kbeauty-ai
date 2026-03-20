@@ -69,6 +69,7 @@ type WheelSlice = {
 
 const HEX_COLOR_PATTERN = /^#([0-9A-F]{6})$/i
 const WHEEL_SLICE_COUNT = 20
+const PORTRAIT_CANVAS_HEIGHT_RATIO = 4 / 3
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -379,7 +380,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
     const cropRef = useRef<CropFocus | null>(null)
     const imageRef = useRef<HTMLImageElement | null>(null)
     const hasAnimatedRef = useRef(false)
-    const [canvasSize, setCanvasSize] = useState(0)
+    const [canvasWidth, setCanvasWidth] = useState(0)
     const [imageReady, setImageReady] = useState(false)
 
     useImperativeHandle(ref, () => ({
@@ -393,7 +394,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
 
       const observer = new ResizeObserver((entries) => {
         const nextWidth = entries[0]?.contentRect.width ?? 0
-        setCanvasSize(Math.max(280, Math.round(nextWidth)))
+        setCanvasWidth(Math.max(280, Math.round(nextWidth)))
       })
 
       observer.observe(containerRef.current)
@@ -437,7 +438,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       const image = imageRef.current
       const crop = cropRef.current
 
-      if (!canvas || !image || !crop || !canvasSize || !imageReady) {
+      if (!canvas || !image || !crop || !canvasWidth || !imageReady) {
         return
       }
 
@@ -448,37 +449,38 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       }
 
       const dpr = window.devicePixelRatio || 1
-      const size = canvasSize
+      const width = canvasWidth
+      const height = Math.round(canvasWidth * PORTRAIT_CANVAS_HEIGHT_RATIO)
       const slices = buildWheelSlices(season, bestColors, avoidColors, selectedHex)
 
-      canvas.width = Math.round(size * dpr)
-      canvas.height = Math.round(size * dpr)
-      canvas.style.width = `${size}px`
-      canvas.style.height = `${size}px`
+      canvas.width = Math.round(width * dpr)
+      canvas.height = Math.round(height * dpr)
+      canvas.style.width = `${width}px`
+      canvas.style.height = `${height}px`
       context.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-      const centerX = size / 2
-      const centerY = size / 2
-      const outerRadius = size * 0.82
-      const faceRadius = size * 0.19
+      const centerX = width / 2
+      const centerY = height / 2
+      const outerRadius = Math.max(width, height) * 0.82
+      const faceRadius = width * 0.19
       const totalSlices = slices.length
       const sliceAngle = (Math.PI * 2) / totalSlices
       let animationFrameId = 0
 
       const draw = (elapsedMs: number) => {
-        context.clearRect(0, 0, size, size)
+        context.clearRect(0, 0, width, height)
 
-        const background = context.createLinearGradient(0, 0, size, size)
+        const background = context.createLinearGradient(0, 0, width, height)
         background.addColorStop(0, mixHexWithWhite(backgroundHex, 0.1))
         background.addColorStop(1, mixHexWithBlack(backgroundHex, 0.08))
         context.fillStyle = background
-        context.fillRect(0, 0, size, size)
+        context.fillRect(0, 0, width, height)
 
         const glow = context.createRadialGradient(centerX, centerY, faceRadius * 0.82, centerX, centerY, outerRadius)
         glow.addColorStop(0, 'rgba(255,255,255,0.08)')
         glow.addColorStop(1, 'rgba(255,255,255,0)')
         context.fillStyle = glow
-        context.fillRect(0, 0, size, size)
+        context.fillRect(0, 0, width, height)
 
         const animationProgress = clamp(elapsedMs / 1000, 0, 1)
         const radiusProgress = easeOutCubic(animationProgress)
@@ -529,7 +531,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
         context.strokeStyle = 'rgba(45,27,47,0.06)'
         context.lineWidth = 1
         context.beginPath()
-        context.arc(centerX, centerY, size * 0.47, 0, Math.PI * 2)
+        context.arc(centerX, centerY, width * 0.47, 0, Math.PI * 2)
         context.stroke()
       }
 
@@ -556,13 +558,14 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       animationFrameId = window.requestAnimationFrame(animate)
 
       return () => window.cancelAnimationFrame(animationFrameId)
-    }, [animateVersion, avoidColors, backgroundHex, bestColors, canvasSize, imageReady, season, selectedHex])
+    }, [animateVersion, avoidColors, backgroundHex, bestColors, canvasWidth, imageReady, season, selectedHex])
 
     return (
       <div ref={containerRef} className="mx-auto w-[84vw] max-w-[500px] md:w-full md:max-w-[560px]">
         <canvas
           ref={canvasRef}
-          className="aspect-square w-full rounded-[28px] shadow-[0_22px_52px_rgba(45,27,47,0.16)]"
+          className="w-full rounded-[28px] shadow-[0_22px_52px_rgba(45,27,47,0.16)]"
+          style={{ aspectRatio: '3 / 4' }}
         />
       </div>
     )
