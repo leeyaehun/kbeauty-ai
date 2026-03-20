@@ -19,6 +19,7 @@ import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib
 import { createClient } from '@/lib/supabase'
 
 type Region = ShoppingRegion
+type UserPlan = 'free' | 'membership'
 
 type Product = {
   id: string
@@ -67,11 +68,15 @@ export default function CarePage() {
   const [careError, setCareError] = useState('')
   const [toastMessage, setToastMessage] = useState('')
   const [user, setUser] = useState<User | null>(null)
+  const [plan, setPlan] = useState<UserPlan>('free')
   const [wishlistIds, setWishlistIds] = useState<Set<string>>(new Set())
   const [pendingWishlistIds, setPendingWishlistIds] = useState<Set<string>>(new Set())
 
   const careCategories = Object.keys(CARE_SUBCATEGORIES) as CareCategory[]
   const pathnameForLogin = '/care'
+  const isMember = plan === 'membership'
+  const visibleProducts = isMember ? careProducts : careProducts.slice(0, 3)
+  const blurredProducts = isMember ? [] : careProducts.slice(3, 6)
 
   useEffect(() => {
     const supabase = createClient()
@@ -85,12 +90,40 @@ export default function CarePage() {
 
     supabase.auth.getUser().then(({ data: { user: currentUser } }) => {
       setUser(currentUser)
+
+      if (!currentUser) {
+        setPlan('free')
+        return
+      }
+
+      void supabase
+        .from('user_plans')
+        .select('plan')
+        .eq('user_id', currentUser.id)
+        .single()
+        .then(({ data: planData }) => {
+          setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
+        })
     })
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null)
+
+      if (!session?.user) {
+        setPlan('free')
+        return
+      }
+
+      void supabase
+        .from('user_plans')
+        .select('plan')
+        .eq('user_id', session.user.id)
+        .single()
+        .then(({ data: planData }) => {
+          setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
+        })
     })
 
     setRegionReady(true)
@@ -213,6 +246,15 @@ export default function CarePage() {
         return next
       })
     }
+  }
+
+  function goToMembership() {
+    if (!user) {
+      router.push('/login?redirect=%2Fmembership')
+      return
+    }
+
+    router.push('/membership')
   }
 
   useEffect(() => {
@@ -355,7 +397,7 @@ export default function CarePage() {
           </div>
         ) : (
           <div className="grid gap-5">
-            {careProducts.map((product) => (
+            {visibleProducts.map((product) => (
               <ProductCard
                 key={product.id}
                 brand={product.brand}
@@ -384,6 +426,60 @@ export default function CarePage() {
                 )}
               />
             ))}
+
+            {blurredProducts.map((product) => (
+              <div key={product.id} className="relative overflow-hidden rounded-[32px]">
+                <div className="pointer-events-none select-none blur-sm">
+                  <ProductCard
+                    brand={product.brand}
+                    categoryLabel={product.subcategory ?? careSubcategory}
+                    displayAffiliateUrl={product.display_affiliate_url}
+                    displayButtonLabel={product.display_button_label}
+                    displayPrice={getDisplayPrice(product)}
+                    explanation={getCareExplanation(careCategory, (product.subcategory as CareSubcategory | null) ?? careSubcategory)}
+                    imageUrl={product.image_url}
+                    name={product.name}
+                    showMatchScore={false}
+                    productAction={(
+                      <button
+                        type="button"
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(255,107,157,0.16)] bg-white/90"
+                        aria-hidden="true"
+                      >
+                        <Heart className="h-5 w-5" color="#9ca3af" />
+                      </button>
+                    )}
+                  />
+                </div>
+
+                <div className="absolute inset-0 flex flex-col items-center justify-center rounded-[32px] bg-white/60 px-6 text-center">
+                  <p className="text-sm font-semibold text-gray-800">Members only</p>
+                  <button
+                    type="button"
+                    onClick={goToMembership}
+                    className="mt-3 rounded-full bg-pink-500 px-4 py-2 text-xs font-semibold text-white"
+                  >
+                    Unlock with Membership
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {!isMember && blurredProducts.length > 0 ? (
+              <div className="mt-4 rounded-2xl border border-pink-200 bg-pink-50 p-4 text-center">
+                <p className="text-sm font-semibold text-pink-700">Get 6 personalized picks</p>
+                <p className="mt-1 text-xs text-pink-500">
+                  Unlock full recommendations with Membership
+                </p>
+                <button
+                  type="button"
+                  onClick={goToMembership}
+                  className="mt-3 rounded-full bg-pink-500 px-6 py-2 text-sm font-semibold text-white"
+                >
+                  Join Membership - $9/month
+                </button>
+              </div>
+            ) : null}
           </div>
         )}
       </div>
