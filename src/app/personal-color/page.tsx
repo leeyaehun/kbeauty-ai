@@ -7,6 +7,7 @@ import PersonalColorCanvas, {
   type PersonalColorCanvasHandle,
   type PersonalColorSeason,
   type PersonalColorSwatch,
+  SEASON_COLORS,
 } from '@/components/PersonalColorCanvas'
 import UpgradeModal from '@/components/UpgradeModal'
 import { createClient } from '@/lib/supabase'
@@ -121,6 +122,32 @@ function buildPageBackground(hex: string) {
   `
 }
 
+function buildCanvasColors(bestColors: PersonalColorSwatch[], season: PersonalColorSeason) {
+  const seen = new Set<string>()
+  const seasonColors = (SEASON_COLORS[season] ?? []).map((hex, index) => ({
+    hex,
+    name: `Season shade ${String(index + 1).padStart(2, '0')}`,
+  }))
+
+  return [...bestColors, ...seasonColors].filter((color) => {
+    const normalizedHex = color.hex?.toUpperCase()
+
+    if (!normalizedHex || seen.has(normalizedHex)) {
+      return false
+    }
+
+    seen.add(normalizedHex)
+    return true
+  }).map((color) => ({
+    hex: color.hex.toUpperCase(),
+    name: color.name?.trim() || color.hex.toUpperCase(),
+  }))
+}
+
+function withHexOpacity(hex: string, alphaHex: string) {
+  return /^#[0-9A-F]{6}$/i.test(hex) ? `${hex}${alphaHex}` : 'rgba(255,255,255,0.82)'
+}
+
 async function dataUrlToFile(dataUrl: string, fileName: string) {
   const response = await fetch(dataUrl)
   const blob = await response.blob()
@@ -137,7 +164,7 @@ export default function PersonalColorPage() {
   const [loading, setLoading] = useState(true)
   const [paramsReady, setParamsReady] = useState(false)
   const [result, setResult] = useState<PersonalColorResult | null>(null)
-  const [selectedColor, setSelectedColor] = useState<string | null>(null)
+  const [selectedColor, setSelectedColor] = useState<PersonalColorSwatch | null>(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [wheelAnimationVersion, setWheelAnimationVersion] = useState(0)
 
@@ -239,7 +266,11 @@ export default function PersonalColorPage() {
     () => (result ? result.product_recommendations[activeTab] : null),
     [activeTab, result]
   )
-  const canvasBackground = selectedColor ?? seasonMeta?.background ?? '#FFF6FB'
+  const canvasColors = useMemo(
+    () => (result ? buildCanvasColors(result.best_colors, result.season) : []),
+    [result]
+  )
+  const canvasBackground = selectedColor?.hex ?? seasonMeta?.background ?? '#FFF6FB'
 
   async function handleShareColors() {
     const exported = canvasRef.current?.exportImage()
@@ -328,7 +359,7 @@ export default function PersonalColorPage() {
     <main
       className="min-h-screen px-5 py-6 md:px-8 md:py-10"
       style={{
-        background: buildPageBackground(selectedColor ?? seasonMeta.background),
+        background: buildPageBackground(selectedColor?.hex ?? seasonMeta.background),
         color: 'var(--ink)',
         transition: 'background 500ms ease',
       }}
@@ -357,10 +388,10 @@ export default function PersonalColorPage() {
               ref={canvasRef}
               avoidColors={result.avoid_colors}
               backgroundHex={canvasBackground}
-              bestColors={result.best_colors}
+              colors={canvasColors}
               imageData={capturedImage}
               onColorSelect={setSelectedColor}
-              selectedHex={selectedColor}
+              selectedHex={selectedColor?.hex ?? null}
               season={result.season}
             />
 
@@ -373,6 +404,28 @@ export default function PersonalColorPage() {
             >
               Reset to my colors
             </button>
+
+            <div
+              className="mt-4 rounded-[24px] border border-white/70 p-4 shadow-[0_18px_34px_rgba(60,43,57,0.08)] transition-all duration-300"
+              style={{
+                backgroundColor: selectedColor ? withHexOpacity(selectedColor.hex, '26') : 'rgba(255,255,255,0.82)',
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className="h-5 w-5 shrink-0 rounded-full border border-white/80 shadow-[0_8px_16px_rgba(60,43,57,0.08)]"
+                  style={{ backgroundColor: selectedColor?.hex ?? '#D1D5DB' }}
+                />
+                <div className="min-w-0">
+                  <p className={`text-sm font-semibold ${selectedColor ? 'text-[#2d1b2f]' : 'text-[#7c6a78]'}`}>
+                    {selectedColor?.name ?? 'Tap a color to explore'}
+                  </p>
+                  {selectedColor ? (
+                    <p className="mt-1 text-xs text-[#6b7280]">{selectedColor.hex}</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 

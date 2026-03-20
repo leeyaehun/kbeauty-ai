@@ -50,9 +50,9 @@ type PersonalColorCanvasProps = {
   animateVersion: number
   avoidColors: PersonalColorSwatch[]
   backgroundHex: string
-  bestColors: PersonalColorSwatch[]
+  colors: PersonalColorSwatch[]
   imageData: string
-  onColorSelect?: (hex: string) => void
+  onColorSelect?: (color: PersonalColorSwatch) => void
   selectedHex: string | null
   season: PersonalColorSeason
 }
@@ -64,7 +64,7 @@ type CropFocus = {
 }
 
 type WheelSlice = {
-  hex: string
+  color: PersonalColorSwatch
   isAvoid: boolean
 }
 
@@ -294,48 +294,76 @@ function uniqueHexes(hexes: string[]) {
   return [...new Set(hexes.filter(isValidHexColor).map((hex) => hex.toUpperCase()))]
 }
 
+function normalizeSwatches(colors: PersonalColorSwatch[]) {
+  const seen = new Set<string>()
+
+  return colors.filter((color) => {
+    if (!isValidHexColor(color.hex)) {
+      return false
+    }
+
+    const normalizedHex = color.hex.toUpperCase()
+
+    if (seen.has(normalizedHex)) {
+      return false
+    }
+
+    seen.add(normalizedHex)
+    return true
+  }).map((color) => ({
+    hex: color.hex.toUpperCase(),
+    name: color.name?.trim() || color.hex.toUpperCase(),
+  }))
+}
+
 function normalizeSeasonPalette(season: PersonalColorSeason) {
   const validSeasonColors = uniqueHexes(SEASON_COLORS[season] ?? [])
 
   if (validSeasonColors.length === 0) {
-    return Array.from({ length: WHEEL_SLICE_COUNT }, () => '#D94D82')
+    return Array.from({ length: WHEEL_SLICE_COUNT }, (_, index) => ({
+      hex: '#D94D82',
+      name: `Season shade ${String(index + 1).padStart(2, '0')}`,
+    }))
   }
 
   return Array.from(
     { length: WHEEL_SLICE_COUNT },
-    (_, index) => validSeasonColors[index % validSeasonColors.length]
+    (_, index) => ({
+      hex: validSeasonColors[index % validSeasonColors.length],
+      name: `Season shade ${String(index + 1).padStart(2, '0')}`,
+    })
   )
 }
 
 function buildWheelSlices(
   season: PersonalColorSeason,
-  bestColors: PersonalColorSwatch[],
+  colors: PersonalColorSwatch[],
   avoidColors: PersonalColorSwatch[],
   selectedHex: string | null
 ): WheelSlice[] {
   const seasonPalette = normalizeSeasonPalette(season)
-  const preferredHexes = selectedHex
+  const preferredColors = selectedHex
     ? buildSelectedFamily(selectedHex, season)
-    : uniqueHexes([
-        ...bestColors.map((color) => color.hex),
+    : normalizeSwatches([
+        ...colors,
         ...seasonPalette,
       ]).slice(0, WHEEL_SLICE_COUNT)
-  const safePreferredHexes = preferredHexes.length > 0 ? preferredHexes : seasonPalette
-  const avoidHexes = uniqueHexes(avoidColors.map((color) => color.hex)).slice(0, 4)
-  const slices: WheelSlice[] = safePreferredHexes.map((hex) => ({ hex, isAvoid: false }))
+  const safePreferredColors = preferredColors.length > 0 ? preferredColors : seasonPalette
+  const avoidPalette = normalizeSwatches(avoidColors).slice(0, 4)
+  const slices: WheelSlice[] = safePreferredColors.map((color) => ({ color, isAvoid: false }))
 
-  if (avoidHexes.length === 0) {
+  if (avoidPalette.length === 0) {
     return slices
   }
 
-  for (let index = 0; index < avoidHexes.length; index += 1) {
+  for (let index = 0; index < avoidPalette.length; index += 1) {
     const insertAt = Math.min(
       slices.length,
-      Math.round(((safePreferredHexes.length + index) / avoidHexes.length) * (index + 1))
+      Math.round(((safePreferredColors.length + index) / avoidPalette.length) * (index + 1))
     )
 
     slices.splice(insertAt, 0, {
-      hex: avoidHexes[index],
+      color: avoidPalette[index],
       isAvoid: true,
     })
   }
@@ -359,7 +387,10 @@ function buildSelectedFamily(selectedHex: string, season: PersonalColorSeason) {
     const hueShift = (position - 0.5) * 26
     const saturation = clamp(hsl.s + 12 - position * 18, 38, 96)
     const lightness = clamp(30 + position * 42, 22, 82)
-    return hslToHex(hsl.h + hueShift, saturation, lightness)
+    return {
+      hex: hslToHex(hsl.h + hueShift, saturation, lightness),
+      name: `Selected shade ${String(index + 1).padStart(2, '0')}`,
+    }
   })
 }
 
@@ -369,7 +400,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       animateVersion,
       avoidColors,
       backgroundHex,
-      bestColors,
+      colors,
       imageData,
       onColorSelect,
       selectedHex,
@@ -448,7 +479,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       const centerY = height / 2
       const outerRadius = Math.max(width, height) * 0.82
       const faceRadius = width * 0.19
-      const slices = buildWheelSlices(season, bestColors, avoidColors, selectedHex)
+      const slices = buildWheelSlices(season, colors, avoidColors, selectedHex)
       const sliceAngle = (Math.PI * 2) / slices.length
 
       const handleCanvasClick = (event: MouseEvent) => {
@@ -466,7 +497,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
         const selectedSlice = slices[sliceIndex]
 
         if (selectedSlice) {
-          onColorSelect(selectedSlice.hex)
+          onColorSelect(selectedSlice.color)
         }
       }
 
@@ -475,7 +506,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       return () => {
         canvas.removeEventListener('click', handleCanvasClick)
       }
-    }, [avoidColors, bestColors, canvasWidth, onColorSelect, season, selectedHex])
+    }, [avoidColors, canvasWidth, colors, onColorSelect, season, selectedHex])
 
     useEffect(() => {
       const canvas = canvasRef.current
@@ -495,7 +526,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       const dpr = window.devicePixelRatio || 1
       const width = canvasWidth
       const height = Math.round(canvasWidth * PORTRAIT_CANVAS_HEIGHT_RATIO)
-      const slices = buildWheelSlices(season, bestColors, avoidColors, selectedHex)
+      const slices = buildWheelSlices(season, colors, avoidColors, selectedHex)
 
       canvas.width = Math.round(width * dpr)
       canvas.height = Math.round(height * dpr)
@@ -539,7 +570,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
           context.moveTo(centerX, centerY)
           context.arc(centerX, centerY, activeRadius, startAngle, endAngle)
           context.closePath()
-          context.fillStyle = slice.hex
+          context.fillStyle = slice.color.hex
           context.fill()
         }
 
@@ -602,7 +633,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       animationFrameId = window.requestAnimationFrame(animate)
 
       return () => window.cancelAnimationFrame(animationFrameId)
-    }, [animateVersion, avoidColors, backgroundHex, bestColors, canvasWidth, imageReady, season, selectedHex])
+    }, [animateVersion, avoidColors, backgroundHex, canvasWidth, colors, imageReady, season, selectedHex])
 
     return (
       <div ref={containerRef} className="mx-auto w-[84vw] max-w-[500px] md:w-full md:max-w-[560px]">
