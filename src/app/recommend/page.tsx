@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+import ProductCard from '@/components/ProductCard'
 import { getProductPricePresentation, type PriceCurrencyCode } from '@/lib/pricing'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
@@ -66,27 +67,6 @@ function getDisplayMatchScore(similarity: number | null | undefined) {
 
 function getDisplayPrice(product: Product) {
   return product.display_price ?? getProductPricePresentation(product.price, product.category).displayPrice
-}
-
-function ProductImage({ imageUrl, productName }: { imageUrl: string | null, productName: string }) {
-  const [imageFailed, setImageFailed] = useState(false)
-
-  if (!imageUrl || imageFailed) {
-    return (
-      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[22px] bg-[linear-gradient(135deg,#fff3eb,#ffe4ef)] text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d94d82] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-        No Image
-      </div>
-    )
-  }
-
-  return (
-    <img
-      src={imageUrl}
-      alt={productName}
-      className="h-20 w-20 shrink-0 rounded-[22px] object-cover shadow-[0_12px_24px_rgba(149,64,109,0.12)]"
-      onError={() => setImageFailed(true)}
-    />
-  )
 }
 
 export default function RecommendPage() {
@@ -317,73 +297,19 @@ export default function RecommendPage() {
             </div>
           ) : (
             products.map(product => {
-              const matchScore = getDisplayMatchScore(product.similarity)
-              const displayPrice = getDisplayPrice(product)
-
               return (
-                <div
+                <ProductCard
                   key={product.id}
-                  className="brand-card overflow-hidden p-6 md:p-7"
-                >
-                <div className="flex flex-col gap-5">
-                  <div className="flex items-start gap-4">
-                    <ProductImage
-                      imageUrl={product.image_url}
-                      productName={product.name}
-                    />
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="brand-chip px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">
-                          {product.brand}
-                        </span>
-                        <span className="rounded-full bg-[#fff0f5] px-3 py-1 text-xs font-semibold text-[#c89b3c]">
-                          {CATEGORY_LABELS[product.category] || product.category}
-                        </span>
-                      </div>
-
-                      <h2 className="mt-3 text-lg font-semibold leading-snug tracking-[-0.03em] text-[var(--ink)] md:text-xl">
-                        {product.name}
-                      </h2>
-
-                      <p className="mt-2 text-xl font-semibold text-[#d94d82]">
-                        {displayPrice ?? 'Price unavailable'}
-                      </p>
-
-                      <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">
-                        {product.explanation || 'Balanced to support your skin profile with a targeted K-beauty ingredient focus.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-[24px] border border-[rgba(255,107,157,0.12)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(255,240,245,0.92))] p-4 shadow-[0_16px_28px_rgba(149,64,109,0.08)]">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-[var(--muted)]">Match score</span>
-                      <span className="text-lg font-semibold text-[#d94d82]">
-                        {matchScore}%
-                      </span>
-                    </div>
-
-                    <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
-                      <div
-                        className="h-full rounded-full bg-[linear-gradient(90deg,#ff6b9d,#f6deb1)]"
-                        style={{ width: `${matchScore}%` }}
-                      />
-                    </div>
-
-                    {product.display_affiliate_url && (
-                      <a
-                        href={product.display_affiliate_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="brand-button-primary mt-4 block w-full px-5 py-3 text-center font-semibold"
-                      >
-                        {product.display_button_label}
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
+                  brand={product.brand}
+                  categoryLabel={CATEGORY_LABELS[product.category] || product.category}
+                  displayAffiliateUrl={product.display_affiliate_url}
+                  displayButtonLabel={product.display_button_label}
+                  displayPrice={getDisplayPrice(product)}
+                  explanation={product.explanation || 'Balanced to support your skin profile with a targeted K-beauty ingredient focus.'}
+                  imageUrl={product.image_url}
+                  matchScore={getDisplayMatchScore(product.similarity)}
+                  name={product.name}
+                />
               )
             })
           )}
