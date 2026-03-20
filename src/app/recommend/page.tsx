@@ -60,6 +60,7 @@ type Product = {
 }
 
 type Region = ShoppingRegion
+type UserPlan = 'free' | 'membership'
 
 function isPopularPickCategory(category: string | null | undefined) {
   return category === 'Hair' || category === 'Body'
@@ -101,10 +102,11 @@ export default function RecommendPage() {
   const [regionReady, setRegionReady] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
   const [user, setUser] = useState<User | null>(null)
+  const [plan, setPlan] = useState<UserPlan>('free')
   const [wishlistIds, setWishlistIds] = useState<Set<string>>(new Set())
   const [pendingWishlistIds, setPendingWishlistIds] = useState<Set<string>>(new Set())
 
-  const categories = ['Cleanser', 'Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Sun Care', 'Hair', 'Body']
+  const categories = ['Cleanser', 'Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Sun Care']
 
   useEffect(() => {
     const supabase = createClient()
@@ -118,12 +120,40 @@ export default function RecommendPage() {
 
     supabase.auth.getUser().then(({ data: { user: currentUser } }) => {
       setUser(currentUser)
+
+      if (!currentUser) {
+        setPlan('free')
+        return
+      }
+
+      void supabase
+        .from('user_plans')
+        .select('plan')
+        .eq('user_id', currentUser.id)
+        .single()
+        .then(({ data: planData }) => {
+          setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
+        })
     })
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null)
+
+      if (!session?.user) {
+        setPlan('free')
+        return
+      }
+
+      void supabase
+        .from('user_plans')
+        .select('plan')
+        .eq('user_id', session.user.id)
+        .single()
+        .then(({ data: planData }) => {
+          setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
+        })
     })
 
     setRegionReady(true)
@@ -384,10 +414,10 @@ export default function RecommendPage() {
               Curated recommendations
             </div>
             <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
-              Your K-beauty lineup
+              Your Skincare Routine
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-              Handpicked formulas aligned to your skin profile, explained in a softer editorial style for global beauty lovers.
+              Step-by-step personalized picks to build your skincare routine.
             </p>
           </div>
           <div className="rounded-full border border-[rgba(200,155,60,0.24)] bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(246,222,177,0.45))] px-5 py-3 text-sm font-semibold text-[#c89b3c] shadow-[0_14px_24px_rgba(149,64,109,0.08)]">
@@ -468,13 +498,7 @@ export default function RecommendPage() {
           )}
         </div>
 
-        <div className="mt-8 grid gap-3 md:grid-cols-2">
-          <button
-            type="button"
-            className="w-full rounded-full bg-[#ff6b9d] px-6 py-4 text-left font-semibold text-white shadow-[0_16px_28px_rgba(217,77,130,0.22)]"
-          >
-            Personalized Skin Picks
-          </button>
+        <div className="mt-8">
           <button
             type="button"
             onClick={() => router.push('/care')}
@@ -485,42 +509,33 @@ export default function RecommendPage() {
           </button>
         </div>
 
-        <div className="brand-card mt-6 p-6 text-center">
-          <p className="text-lg font-semibold text-[var(--ink)]">K-Beauty AI Membership</p>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            Unlimited analyses, history storage, and six product recommendations every time.
-          </p>
-          <button
-            onClick={async () => {
-              const supabase = createClient()
-              const { data: { user } } = await supabase.auth.getUser()
+        {plan !== 'membership' ? (
+          <div className="brand-card mt-6 p-6 text-center">
+            <p className="text-lg font-semibold text-[var(--ink)]">K-Beauty AI Membership</p>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Unlock personal color analysis and premium makeup recommendations.
+            </p>
+            <button
+              onClick={async () => {
+                const supabase = createClient()
+                const { data: { user } } = await supabase.auth.getUser()
 
-              if (!user) {
-                router.push('/login?redirect=checkout')
-                return
-              }
+                if (!user) {
+                  router.push('/login?redirect=checkout')
+                  return
+                }
 
-              const { data: planData } = await supabase
-                .from('user_plans')
-                .select('plan')
-                .eq('user_id', user.id)
-                .single()
-
-              console.log('Current plan:', planData?.plan)
-
-              const hasMembership = planData?.plan === 'membership'
-              void hasMembership
-
-              const res = await fetch('/api/stripe/checkout', { method: 'POST' })
-              const data = await res.json()
-              if (data.url) window.location.href = data.url
-              else alert(data.error || 'Something went wrong.')
-            }}
-            className="brand-button-primary mt-5 w-full py-4 font-semibold"
-          >
-            Membership — $9/month
-          </button>
-        </div>
+                const res = await fetch('/api/stripe/checkout', { method: 'POST' })
+                const data = await res.json()
+                if (data.url) window.location.href = data.url
+                else alert(data.error || 'Something went wrong.')
+              }}
+              className="brand-button-primary mt-5 w-full py-4 font-semibold"
+            >
+              Membership — $9/month
+            </button>
+          </div>
+        ) : null}
 
         <button
           onClick={() => router.push('/analyze')}

@@ -8,6 +8,8 @@ import RegionModal from '@/components/RegionModal'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
 
+type UserPlan = 'free' | 'membership'
+
 function getHomeName(user: User | null) {
   if (!user) {
     return ''
@@ -27,14 +29,29 @@ function getHomeName(user: User | null) {
 export default function Home() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
+  const [plan, setPlan] = useState<UserPlan>('free')
   const [loading, setLoading] = useState(true)
   const [showRegionModal, setShowRegionModal] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
 
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       setUser(user)
+
+      if (!user) {
+        setPlan('free')
+        setLoading(false)
+        return
+      }
+
+      const { data: planData } = await supabase
+        .from('user_plans')
+        .select('plan')
+        .eq('user_id', user.id)
+        .single()
+
+      setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
       setLoading(false)
     })
 
@@ -106,30 +123,72 @@ export default function Home() {
               <>
                 <button
                   type="button"
-                  onClick={() => router.push('/results-saved')}
-                  className="w-full rounded-full border border-pink-200 bg-white px-8 py-4 font-semibold text-pink-500"
-                >
-                  View My Results →
-                </button>
-
-                <button
-                  type="button"
                   onClick={() => router.push('/personal-color')}
                   className="w-full rounded-full border border-pink-200 bg-white px-8 py-4 font-semibold text-pink-500"
                 >
                   Discover Personal Color →
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => router.push('/care')}
+                  className="w-full rounded-full border border-pink-200 bg-white px-8 py-4 font-semibold text-pink-500"
+                >
+                  Hair &amp; Body Care →
+                </button>
               </>
             ) : (
-              <button
-                type="button"
-                onClick={() => router.push('/login')}
-                className="text-sm font-medium text-[var(--muted)] underline underline-offset-4"
-              >
-                Sign in to save your results
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => router.push('/login')}
+                  className="text-sm font-medium text-[var(--muted)] underline underline-offset-4"
+                >
+                  Sign in to save your results
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => router.push('/care')}
+                  className="w-full rounded-full border border-pink-200 bg-white px-8 py-4 font-semibold text-pink-500"
+                >
+                  Hair &amp; Body Care →
+                </button>
+              </>
             )}
           </div>
+
+          {plan !== 'membership' ? (
+            <div className="mx-auto max-w-xl rounded-[28px] border border-[rgba(255,107,157,0.14)] bg-white/92 p-6 text-center shadow-[0_18px_34px_rgba(149,64,109,0.08)]">
+              <p className="text-lg font-semibold text-[var(--ink)]">K-Beauty AI Membership</p>
+              <p className="mt-2 text-sm text-[var(--muted)]">
+                Unlock personal color analysis and premium makeup recommendations.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!user) {
+                    router.push('/login?redirect=checkout')
+                    return
+                  }
+
+                  void fetch('/api/stripe/checkout', { method: 'POST' })
+                    .then((res) => res.json())
+                    .then((data) => {
+                      if (data.url) {
+                        window.location.href = data.url
+                        return
+                      }
+
+                      alert(data.error || 'Something went wrong.')
+                    })
+                }}
+                className="brand-button-primary mt-5 w-full py-4 font-semibold"
+              >
+                Membership — $9/month
+              </button>
+            </div>
+          ) : null}
         </section>
       </div>
     </main>
