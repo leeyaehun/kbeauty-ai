@@ -302,24 +302,6 @@ export default function ResultsSavedPage() {
                   Personalized Product Recommendations
                 </button>
 
-                {user ? (
-                  <button
-                    type="button"
-                    onClick={() => router.push('/history')}
-                    className="brand-button-secondary w-full py-4 font-semibold"
-                  >
-                    View My Skin History
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => router.push('/login')}
-                    className="brand-button-secondary w-full py-4 font-semibold"
-                  >
-                    Sign in to track your progress
-                  </button>
-                )}
-
                 <button
                   type="button"
                   onClick={() => router.push('/analyze')}

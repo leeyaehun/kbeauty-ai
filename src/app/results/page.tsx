@@ -313,22 +313,6 @@ export default function ResultsPage() {
                   Personalized Product Recommendations
                 </button>
 
-                {isSignedIn ? (
-                  <button
-                    onClick={() => router.push('/history')}
-                    className="brand-button-secondary w-full py-4 font-semibold"
-                  >
-                    View My Skin History
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => router.push('/login')}
-                    className="brand-button-secondary w-full py-4 font-semibold"
-                  >
-                    Sign in to track your progress
-                  </button>
-                )}
-
                 <button
                   onClick={() => {
                     const shareUrl = `${window.location.origin}/api/og?skin_type=${result.skin_type}&hydration=${result.scores.hydration}&oiliness=${result.scores.oiliness}&sensitivity=${result.scores.sensitivity}`
