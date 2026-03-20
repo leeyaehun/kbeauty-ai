@@ -78,7 +78,7 @@ export default function RecommendPage() {
   const [region, setRegion] = useState<Region>('korea')
   const [regionReady, setRegionReady] = useState(false)
 
-  const categories = ['Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Cleanser', 'Sun Care', 'Hair', 'Body']
+  const categories = ['Cleanser', 'Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Sun Care', 'Hair', 'Body']
 
   useEffect(() => {
     const storedRegion = window.localStorage.getItem(REGION_STORAGE_KEY)

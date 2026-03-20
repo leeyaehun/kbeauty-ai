@@ -10,7 +10,7 @@ const MIN_MATCH_SCORE = 0.6
 const QUERY_TIMEOUT_MS = 12000
 const MAX_VECTOR_CANDIDATES = 2500
 const DEFAULT_REGION: ShoppingRegion = 'korea'
-const DEFAULT_CATEGORIES = ['Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Cleanser', 'Sun Care', 'Hair', 'Body']
+const DEFAULT_CATEGORIES = ['Cleanser', 'Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Sun Care', 'Hair', 'Body']
 const POPULAR_PICK_CATEGORIES = new Set(['Hair', 'Body'])
 const BASE_CATEGORY_ALIASES: Record<string, string[]> = {
   Toner: ['Toner', '토너', 'toner'],
