@@ -48,6 +48,21 @@ type WishlistProduct = {
   price: number | null
 }
 
+function isMissingColumn(error: unknown, columnName: string) {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const code = 'code' in error ? error.code : null
+  const message = 'message' in error ? error.message : null
+
+  return code === '42703' && typeof message === 'string' && message.includes(columnName)
+}
+
+function isMissingGlobalAffiliateUrlColumn(error: unknown) {
+  return isMissingColumn(error, 'global_affiliate_url')
+}
+
 async function getAuthenticatedUser() {
   const authSupabase = await createServerSupabaseClient()
   const {
@@ -68,7 +83,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Please sign in to view your wishlist.' }, { status: 401 })
     }
 
-    const { data, error } = await databaseSupabase
+    const fullResult = await databaseSupabase
       .from('wishlists')
       .select(`
         product_id,
@@ -87,23 +102,75 @@ export async function GET() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
-    if (error) {
-      console.error('Wishlist GET failed:', error)
-      throw error
+    if (!fullResult.error) {
+      const items = ((fullResult.data ?? []) as unknown as WishlistRow[])
+        .map((entry) => ({
+          ...entry,
+          product: normalizeWishlistProduct(entry.product),
+        }))
+        .filter((entry): entry is { created_at: string, product: WishlistProduct, product_id: string } => Boolean(entry.product))
+        .map((entry) => ({
+          created_at: entry.created_at,
+          product: entry.product,
+          product_id: entry.product_id,
+        }))
+
+      return NextResponse.json({
+        items,
+        productIds: items.map((entry) => entry.product_id),
+      })
     }
 
-    const items = ((data ?? []) as unknown as WishlistRow[])
-      .map((entry) => ({
-        ...entry,
-        product: normalizeWishlistProduct(entry.product),
-      }))
+    if (!isMissingGlobalAffiliateUrlColumn(fullResult.error)) {
+      console.error('Wishlist GET failed:', fullResult.error)
+      throw fullResult.error
+    }
+
+    console.warn('Wishlist GET: global_affiliate_url column is missing; falling back to affiliate_url only.')
+
+    const fallbackResult = await databaseSupabase
+      .from('wishlists')
+      .select(`
+        product_id,
+        created_at,
+        product:products (
+          id,
+          name,
+          brand,
+          price,
+          category,
+          affiliate_url,
+          image_url
+        )
+      `)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (fallbackResult.error) {
+      console.error('Wishlist GET fallback failed:', fallbackResult.error)
+      throw fallbackResult.error
+    }
+
+    const items = ((fallbackResult.data ?? []) as unknown as WishlistRow[])
+      .map((entry) => {
+        const product = normalizeWishlistProduct(entry.product)
+
+        return {
+          ...entry,
+          product: product
+            ? {
+                ...product,
+                global_affiliate_url: null as string | null,
+              }
+            : null,
+        }
+      })
       .filter((entry): entry is { created_at: string, product: WishlistProduct, product_id: string } => Boolean(entry.product))
       .map((entry) => ({
         created_at: entry.created_at,
         product: entry.product,
         product_id: entry.product_id,
       }))
-
     return NextResponse.json({
       items,
       productIds: items.map((entry) => entry.product_id),
