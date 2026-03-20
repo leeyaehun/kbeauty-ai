@@ -144,13 +144,15 @@ export default function LiveColorCamera({
         context.arc(centerX, centerY, faceRadius, 0, Math.PI * 2)
         context.closePath()
         context.clip()
+        context.translate(width, 0)
+        context.scale(-1, 1)
         context.drawImage(
           video,
           sourceX,
           sourceY,
           sourceSize,
           sourceSize,
-          centerX - faceRadius,
+          width - (centerX + faceRadius),
           centerY - faceRadius,
           faceRadius * 2,
           faceRadius * 2

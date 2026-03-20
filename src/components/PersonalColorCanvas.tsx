@@ -338,37 +338,16 @@ function normalizeSeasonPalette(season: PersonalColorSeason) {
 function buildWheelSlices(
   season: PersonalColorSeason,
   colors: PersonalColorSwatch[],
-  avoidColors: PersonalColorSwatch[],
-  selectedHex: string | null
+  _avoidColors: PersonalColorSwatch[],
+  _selectedHex: string | null
 ): WheelSlice[] {
   const seasonPalette = normalizeSeasonPalette(season)
-  const preferredColors = selectedHex
-    ? buildSelectedFamily(selectedHex, season)
-    : normalizeSwatches([
-        ...colors,
-        ...seasonPalette,
-      ]).slice(0, WHEEL_SLICE_COUNT)
+  const preferredColors = normalizeSwatches([
+    ...colors,
+    ...seasonPalette,
+  ]).slice(0, WHEEL_SLICE_COUNT)
   const safePreferredColors = preferredColors.length > 0 ? preferredColors : seasonPalette
-  const avoidPalette = normalizeSwatches(avoidColors).slice(0, 4)
-  const slices: WheelSlice[] = safePreferredColors.map((color) => ({ color, isAvoid: false }))
-
-  if (avoidPalette.length === 0) {
-    return slices
-  }
-
-  for (let index = 0; index < avoidPalette.length; index += 1) {
-    const insertAt = Math.min(
-      slices.length,
-      Math.round(((safePreferredColors.length + index) / avoidPalette.length) * (index + 1))
-    )
-
-    slices.splice(insertAt, 0, {
-      color: avoidPalette[index],
-      isAvoid: true,
-    })
-  }
-
-  return slices
+  return safePreferredColors.map((color) => ({ color, isAvoid: false }))
 }
 
 function buildSelectedFamily(selectedHex: string, season: PersonalColorSeason) {
