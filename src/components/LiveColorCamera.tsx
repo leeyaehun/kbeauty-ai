@@ -15,9 +15,13 @@ type LiveColorCameraProps = {
 
 const CANVAS_ASPECT_RATIO = 4 / 3
 const FACE_DETECTION_CONFIDENCE = 0.6
-const MAX_MISSED_DETECTION_FRAMES = 18
+const MAX_MISSED_DETECTION_FRAMES = 28
 const FACE_FRAME_RADIUS_X_RATIO = 0.225
 const FACE_FRAME_RADIUS_Y_MULTIPLIER = 1.35
+const FACE_CROP_CENTER_SMOOTHING = 0.2
+const FACE_CROP_RADIUS_SMOOTHING = 0.12
+const FACE_CROP_DEADBAND_PX = 8
+const FACE_CROP_RADIUS_DEADBAND = 6
 
 type FaceCrop = {
   centerX: number
@@ -29,8 +33,12 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
+function lerp(current: number, target: number, alpha: number) {
+  return current + (target - current) * alpha
+}
+
 function createDefaultVideoCrop(video: HTMLVideoElement): FaceCrop {
-  const sourceSize = Math.min(video.videoWidth, video.videoHeight) * 0.72
+  const sourceSize = Math.min(video.videoWidth, video.videoHeight) * 0.58
 
   return {
     centerX: video.videoWidth / 2,
@@ -52,6 +60,8 @@ export default function LiveColorCamera({
   const frameRef = useRef<number | null>(null)
   const detectorRef = useRef<{ detectForVideo: (video: HTMLVideoElement, timestamp: number) => { detections?: Array<{ boundingBox?: { originX?: number, originY?: number, width?: number, height?: number } }> }, close: () => void } | null>(null)
   const cropRef = useRef<FaceCrop | null>(null)
+  const targetCropRef = useRef<FaceCrop | null>(null)
+  const stableCropRef = useRef<FaceCrop | null>(null)
   const missedDetectionFramesRef = useRef(0)
   const [cameraState, setCameraState] = useState<'requesting' | 'ready' | 'error'>('requesting')
   const [errorMessage, setErrorMessage] = useState('')
@@ -89,7 +99,10 @@ export default function LiveColorCamera({
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
-          cropRef.current = createDefaultVideoCrop(videoRef.current)
+          const defaultCrop = createDefaultVideoCrop(videoRef.current)
+          cropRef.current = defaultCrop
+          targetCropRef.current = defaultCrop
+          stableCropRef.current = defaultCrop
         }
 
         const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision')
@@ -177,7 +190,10 @@ export default function LiveColorCamera({
           missedDetectionFramesRef.current += 1
 
           if (missedDetectionFramesRef.current > MAX_MISSED_DETECTION_FRAMES) {
-            cropRef.current = createDefaultVideoCrop(video)
+            targetCropRef.current = stableCropRef.current ?? createDefaultVideoCrop(video)
+          }
+
+          if (missedDetectionFramesRef.current > MAX_MISSED_DETECTION_FRAMES + 10) {
             setFaceHint('Move a little closer so we can match your color live.')
           }
 
@@ -188,14 +204,27 @@ export default function LiveColorCamera({
         const height = box.height ?? 0
         const centerX = (box.originX ?? 0) + width / 2
         const centerY = (box.originY ?? 0) + height / 2
-        const paddedRadius = Math.max(width, height) * 1.15
-        const minRadius = Math.min(video.videoWidth, video.videoHeight) * 0.18
-        const maxRadius = Math.min(video.videoWidth, video.videoHeight) * 0.42
-
-        cropRef.current = {
+        const paddedRadius = Math.max(width, height) * 0.98
+        const minRadius = Math.min(video.videoWidth, video.videoHeight) * 0.14
+        const maxRadius = Math.min(video.videoWidth, video.videoHeight) * 0.34
+        const nextTargetCrop = {
           centerX: clamp(centerX, paddedRadius, video.videoWidth - paddedRadius),
           centerY: clamp(centerY, paddedRadius, video.videoHeight - paddedRadius),
           radius: clamp(paddedRadius, minRadius, maxRadius),
+        }
+        const currentTarget = targetCropRef.current
+        const centerDeltaX = Math.abs((currentTarget?.centerX ?? nextTargetCrop.centerX) - nextTargetCrop.centerX)
+        const centerDeltaY = Math.abs((currentTarget?.centerY ?? nextTargetCrop.centerY) - nextTargetCrop.centerY)
+        const radiusDelta = Math.abs((currentTarget?.radius ?? nextTargetCrop.radius) - nextTargetCrop.radius)
+
+        if (
+          centerDeltaX >= FACE_CROP_DEADBAND_PX
+          || centerDeltaY >= FACE_CROP_DEADBAND_PX
+          || radiusDelta >= FACE_CROP_RADIUS_DEADBAND
+          || !currentTarget
+        ) {
+          targetCropRef.current = nextTargetCrop
+          stableCropRef.current = nextTargetCrop
         }
 
         missedDetectionFramesRef.current = 0
@@ -238,16 +267,23 @@ export default function LiveColorCamera({
         updateFaceCrop()
 
         const fallbackCrop = createDefaultVideoCrop(video)
-        const activeCrop = cropRef.current ?? fallbackCrop
+        const targetCrop = targetCropRef.current ?? stableCropRef.current ?? fallbackCrop
+        const currentCrop = cropRef.current ?? targetCrop
+        const activeCrop = {
+          centerX: lerp(currentCrop.centerX, targetCrop.centerX, FACE_CROP_CENTER_SMOOTHING),
+          centerY: lerp(currentCrop.centerY, targetCrop.centerY, FACE_CROP_CENTER_SMOOTHING),
+          radius: lerp(currentCrop.radius, targetCrop.radius, FACE_CROP_RADIUS_SMOOTHING),
+        }
+        cropRef.current = activeCrop
         const sourceWidth = clamp(
-          activeCrop.radius * 1.9,
-          Math.min(video.videoWidth, video.videoHeight) * 0.28,
-          Math.min(video.videoWidth, video.videoHeight) * 0.76
+          activeCrop.radius * 1.65,
+          Math.min(video.videoWidth, video.videoHeight) * 0.22,
+          Math.min(video.videoWidth, video.videoHeight) * 0.62
         )
         const sourceHeight = clamp(
-          activeCrop.radius * 2.55,
-          Math.min(video.videoWidth, video.videoHeight) * 0.42,
-          video.videoHeight * 0.9
+          activeCrop.radius * 2.2,
+          Math.min(video.videoWidth, video.videoHeight) * 0.32,
+          video.videoHeight * 0.74
         )
         const sourceX = clamp(
           activeCrop.centerX - sourceWidth / 2,
