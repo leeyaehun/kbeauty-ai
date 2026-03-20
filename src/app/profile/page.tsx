@@ -346,27 +346,20 @@ export default function ProfilePage() {
             <ChevronRight className="h-5 w-5 text-[var(--muted)]" />
           </button>
 
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="brand-card-soft flex items-center justify-between px-5 py-5 text-left"
-          >
-            <div className="flex items-center gap-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff0f5] text-[#d94d82]">
-                <LogOut className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="font-semibold text-[var(--ink)]">Sign Out</p>
-                <p className="mt-1 text-sm text-[var(--muted)]">Sign out of your K-Beauty AI account.</p>
-              </div>
-            </div>
-            <ChevronRight className="h-5 w-5 text-[var(--muted)]" />
-          </button>
         </section>
 
         {error ? (
           <p className="mt-4 text-sm font-medium text-[#ef4444]">{error}</p>
         ) : null}
+
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="mt-8 flex w-full items-center justify-center gap-2 text-sm font-semibold text-[#ef4444]"
+        >
+          <LogOut className="h-4 w-4" />
+          <span>Sign Out</span>
+        </button>
       </div>
     </main>
   )
