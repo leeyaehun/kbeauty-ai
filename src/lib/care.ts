@@ -1,52 +1,138 @@
 export const CARE_SUBCATEGORIES = {
   Hair: ['Damaged Hair', 'Hair Loss', 'Oily Scalp', 'Dry Scalp', 'Curl & Frizz', 'General'],
   Body: ['Dry Skin', 'Rough Skin', 'Sensitive Skin', 'Body Acne', 'General'],
-  'Foot Care': ['Dry Heel', 'General'],
 } as const
 
 export type CareCategory = keyof typeof CARE_SUBCATEGORIES
 export type CareSubcategory = (typeof CARE_SUBCATEGORIES)[CareCategory][number]
 
-const HAIR_SOURCE_CATEGORIES = new Set(['Hair', 'body_hair', '샴푸', '트리트먼트', '헤어에센스'])
-const BODY_SOURCE_CATEGORIES = new Set(['Body', 'body_hair', '바디로션', '바디워시', '핸드크림'])
-const FOOT_KEYWORDS = [
+const HAIR_SOURCE_CATEGORIES = new Set(['Hair', 'hair', 'body_hair', '샴푸', '트리트먼트', '헤어에센스'])
+const BODY_SOURCE_CATEGORIES = new Set(['Body', 'body', 'body_hair', '바디로션', '바디워시'])
+const CANONICAL_HAIR_CATEGORIES = new Set(['Hair', 'hair', '샴푸', '트리트먼트', '헤어에센스'])
+const CANONICAL_BODY_CATEGORIES = new Set(['Body', 'body', '바디로션', '바디워시'])
+
+const OTHER_CARE_KEYWORDS = [
+  'hand',
   'foot',
   'heel',
   'callus',
-  'feet',
+  'nail',
+  'baby',
+  'kids',
+  'kid',
+  'intimate',
+  'feminine',
+  'y-zone',
+  'multi balm',
+  'balm stick',
+  'wellness',
+  'oral',
+  'tooth',
+  'deodor',
+  'sanit',
+  '핸드',
   '풋',
-  '발',
   '발뒤꿈치',
-  '각질',
+  '네일',
+  '베이비',
+  '키즈',
 ]
+
 const HAIR_KEYWORDS = [
   'hair',
   'scalp',
   'shampoo',
   'conditioner',
-  'treatment',
-  'pomade',
+  'hair treatment',
+  'hair oil',
+  'hair essence',
+  'hair pack',
+  'hair mask',
+  'no-wash',
   'curl',
-  'wax',
+  'wave',
+  'perm',
+  'root',
   '헤어',
   '두피',
   '샴푸',
   '트리트먼트',
+  '컬링',
+  '웨이브',
 ]
+
 const BODY_KEYWORDS = [
-  'body',
-  'hand',
+  'body lotion',
+  'body milk',
+  'body cream',
+  'body wash',
+  'body scrub',
+  'body butter',
+  'body mist',
+  'shower gel',
   'bath',
-  'wash',
-  'lotion',
-  'scrub',
-  'butter',
-  'mist',
   '바디',
-  '핸드',
+  '샤워',
+  '바스',
   '워시',
-  '로션',
   '스크럽',
+]
+
+const SKINCARE_KEYWORDS = [
+  'toner',
+  'essence',
+  'ampoule',
+  'serum',
+  'cleanser',
+  'cleansing',
+  'mask',
+  'pad',
+  'sunscreen',
+  'sun cream',
+  'sun stick',
+  'eye cream',
+  'moisturizer',
+  'emulsion',
+  'cream',
+  'lotion',
+  'tonique',
+  '토너',
+  '에센스',
+  '앰플',
+  '세럼',
+  '클렌저',
+  '클렌징',
+  '마스크',
+  '패드',
+  '선크림',
+  '선케어',
+  '아이크림',
+  '모이스처',
+  '에멀전',
+  '크림',
+  '로션',
+]
+
+const MAKEUP_KEYWORDS = [
+  'lip',
+  'tint',
+  'gloss',
+  'foundation',
+  'cushion',
+  'blush',
+  'mascara',
+  'eyeshadow',
+  'eye shadow',
+  'eyeliner',
+  'cover',
+  '립',
+  '틴트',
+  '파운데이션',
+  '쿠션',
+  '블러셔',
+  '마스카라',
+  '아이섀도',
+  '아이라이너',
 ]
 
 function normalize(value: string | null | undefined) {
@@ -57,12 +143,32 @@ function hasKeyword(value: string, keywords: string[]) {
   return keywords.some((keyword) => value.includes(keyword))
 }
 
+function isOtherCareProductName(value: string) {
+  return hasKeyword(value, OTHER_CARE_KEYWORDS)
+}
+
+function isHairProductName(value: string) {
+  return hasKeyword(value, HAIR_KEYWORDS) && !isOtherCareProductName(value)
+}
+
+function isBodyProductName(value: string) {
+  return hasKeyword(value, BODY_KEYWORDS) && !isOtherCareProductName(value) && !isHairProductName(value)
+}
+
+function isSkincareProductName(value: string) {
+  return hasKeyword(value, SKINCARE_KEYWORDS) && !isHairProductName(value) && !isBodyProductName(value)
+}
+
+function isMakeupProductName(value: string) {
+  return hasKeyword(value, MAKEUP_KEYWORDS) && !isHairProductName(value) && !isBodyProductName(value)
+}
+
 export function getDefaultCareSubcategory(category: CareCategory) {
   return CARE_SUBCATEGORIES[category][0]
 }
 
 export function normalizeCareCategory(value: string | null | undefined): CareCategory | null {
-  if (value === 'Hair' || value === 'Body' || value === 'Foot Care') {
+  if (value === 'Hair' || value === 'Body') {
     return value
   }
 
@@ -85,31 +191,27 @@ export function deriveCareCategory(name: string | null | undefined, category: st
   const normalizedName = normalize(name)
   const normalizedCategory = category ?? ''
 
-  if (hasKeyword(normalizedName, FOOT_KEYWORDS)) {
-    return 'Foot Care'
+  if (!normalizedName || isOtherCareProductName(normalizedName)) {
+    return null
   }
 
-  if (HAIR_SOURCE_CATEGORIES.has(normalizedCategory) && hasKeyword(normalizedName, HAIR_KEYWORDS)) {
+  if (isHairProductName(normalizedName)) {
     return 'Hair'
   }
 
-  if (normalizedCategory === 'Hair') {
+  if (isBodyProductName(normalizedName)) {
+    return 'Body'
+  }
+
+  if (isSkincareProductName(normalizedName) || isMakeupProductName(normalizedName)) {
+    return null
+  }
+
+  if (CANONICAL_HAIR_CATEGORIES.has(normalizedCategory)) {
     return 'Hair'
   }
 
-  if (BODY_SOURCE_CATEGORIES.has(normalizedCategory) && hasKeyword(normalizedName, BODY_KEYWORDS)) {
-    return 'Body'
-  }
-
-  if (normalizedCategory === 'Body') {
-    return 'Body'
-  }
-
-  if (normalizedCategory === 'body_hair') {
-    if (hasKeyword(normalizedName, HAIR_KEYWORDS)) {
-      return 'Hair'
-    }
-
+  if (CANONICAL_BODY_CATEGORIES.has(normalizedCategory)) {
     return 'Body'
   }
 
@@ -161,40 +263,26 @@ export function deriveCareSubcategory(name: string | null | undefined, careCateg
     return 'General'
   }
 
-  if (careCategory === 'Body') {
-    if (hasKeyword(normalizedName, ['각질', 'exfoli', '스크럽', 'scrub'])) {
-      return 'Rough Skin'
-    }
-
-    if (hasKeyword(normalizedName, ['민감', 'sensitive', '순한', 'gentle', 'calming'])) {
-      return 'Sensitive Skin'
-    }
-
-    if (hasKeyword(normalizedName, ['여드름', 'acne', '트러블', 'blemish'])) {
-      return 'Body Acne'
-    }
-
-    if (hasKeyword(normalizedName, ['건조', 'dry', '보습', 'moisture', '로션', 'lotion', 'cream', 'butter'])) {
-      return 'Dry Skin'
-    }
-
-    return 'General'
+  if (hasKeyword(normalizedName, ['각질', 'exfoli', '스크럽', 'scrub'])) {
+    return 'Rough Skin'
   }
 
-  if (hasKeyword(normalizedName, ['발뒤꿈치', 'heel', '풋크림', 'foot cream', 'foot', 'callus', 'crack'])) {
-    return 'Dry Heel'
+  if (hasKeyword(normalizedName, ['민감', 'sensitive', '순한', 'gentle', 'calming'])) {
+    return 'Sensitive Skin'
+  }
+
+  if (hasKeyword(normalizedName, ['여드름', 'acne', '트러블', 'blemish'])) {
+    return 'Body Acne'
+  }
+
+  if (hasKeyword(normalizedName, ['건조', 'dry', '보습', 'moisture', '로션', 'lotion', 'cream', 'butter'])) {
+    return 'Dry Skin'
   }
 
   return 'General'
 }
 
 export function getCareExplanation(category: CareCategory, subcategory: CareSubcategory) {
-  if (category === 'Foot Care') {
-    return subcategory === 'Dry Heel'
-      ? 'Picked for dry heel and rough foot care needs.'
-      : 'Browse everyday foot care staples from Olive Young.'
-  }
-
   if (category === 'Hair') {
     return `Browse Korean hair care picks for ${subcategory.toLowerCase()} concerns.`
   }

@@ -19,8 +19,8 @@ const BASE_CATEGORY_ALIASES: Record<string, string[]> = {
   'Face Mask': ['Face Mask', '마스크팩', 'mask'],
   Cleanser: ['Cleanser', '클렌저', 'cleanser'],
   'Sun Care': ['Sun Care', '선케어', 'sun_care'],
-  Hair: ['Hair', '샴푸', '트리트먼트', '헤어에센스'],
-  Body: ['Body', '바디로션', '바디워시', '핸드크림'],
+  Hair: ['Hair', 'hair', '샴푸', '트리트먼트', '헤어에센스'],
+  Body: ['Body', 'body', '바디로션', '바디워시'],
 }
 
 type RecommendedProduct = {

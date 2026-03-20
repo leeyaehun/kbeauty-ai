@@ -13,6 +13,8 @@ const GLOBAL_CATEGORY_KEYS = new Set([
   'eyeshadow',
   'mascara',
   'body_hair',
+  'hair',
+  'body',
 ])
 
 export type PriceCurrencyCode = 'KRW' | 'USD'

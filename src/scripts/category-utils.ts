@@ -36,9 +36,169 @@ export function parseGlobalProductIdFromUrl(url: string | null | undefined) {
   }
 }
 
-function hasAnyKeyword(value: string, patterns: RegExp[]) {
+function hasAnyKeyword(value: string, patterns: readonly RegExp[]) {
   return patterns.some((pattern) => pattern.test(value))
 }
+
+const GLOBAL_HAIR_PATTERNS = [
+  /\bshampoo\b/i,
+  /\bconditioner\b/i,
+  /\bhair\s*treatment\b/i,
+  /\bhair\b/i,
+  /\bscalp\b/i,
+  /\bhair\s*oil\b/i,
+  /\bhair\s*essence\b/i,
+  /\bhair\s*pack\b/i,
+  /\bhair\s*mask\b/i,
+  /\bno[\s-]*wash\b/i,
+  /\broot\b/i,
+  /\bcurl(ing)?\b/i,
+  /\bwave\b/i,
+  /\bperm\b/i,
+  /헤어/i,
+  /두피/i,
+  /샴푸/i,
+  /트리트먼트/i,
+] as const
+
+const GLOBAL_BODY_PATTERNS = [
+  /\bbody\s*lotion\b/i,
+  /\bbody\s*milk\b/i,
+  /\bbody\s*cream\b/i,
+  /\bbody\s*emulsion\b/i,
+  /\bbody\s*wash\b/i,
+  /\bbody\s*scrub\b/i,
+  /\bbody\s*butter\b/i,
+  /\bbody\s*mist\b/i,
+  /\bshower\s*gel\b/i,
+  /\bbath\b/i,
+  /바디/i,
+  /바스/i,
+  /샤워/i,
+  /스크럽/i,
+] as const
+
+const GLOBAL_OTHER_CARE_PATTERNS = [
+  /\bhand\b/i,
+  /\bfoot\b/i,
+  /\bheel\b/i,
+  /\bcallus\b/i,
+  /\bnail\b/i,
+  /\bbaby\b/i,
+  /\bkids?\b/i,
+  /\btissue\b/i,
+  /\bintimate\b/i,
+  /\bfeminine\b/i,
+  /\by[-\s]*zone\b/i,
+  /\bmulti\s*balm\b/i,
+  /\bbalm\s*stick\b/i,
+  /\bwellness\b/i,
+  /\btooth\b/i,
+  /\boral\b/i,
+  /\bdeodor/i,
+  /\bsanit/i,
+  /\bclean\s*up\s*pad\b/i,
+  /핸드/i,
+  /풋/i,
+  /발뒤꿈치/i,
+  /발관리/i,
+  /네일/i,
+] as const
+
+const GLOBAL_CLEANSER_PATTERNS = [
+  /\bcleanser\b/i,
+  /\bcleansing\b/i,
+  /\bfoam\s*cleanser\b/i,
+  /\bcleansing\s*(foam|gel|oil|water|balm)\b/i,
+  /클렌저/i,
+  /클렌징/i,
+] as const
+
+const GLOBAL_SERUM_PATTERNS = [
+  /\bserum\b/i,
+  /\bessence\b/i,
+  /\bampoule\b/i,
+  /\bbooster\b/i,
+  /\bconcentrate\b/i,
+  /세럼/i,
+  /에센스/i,
+] as const
+
+const GLOBAL_CREAM_PATTERNS = [
+  /\bcream\b/i,
+  /\bgel\s*cream\b/i,
+  /\bbarrier\s*cream\b/i,
+  /\bsoothing\s*cream\b/i,
+  /\brepair\s*cream\b/i,
+  /크림/i,
+] as const
+
+const DOMESTIC_HAIR_PATTERNS = [
+  /샴푸/i,
+  /린스/i,
+  /컨디셔너/i,
+  /트리트먼트/i,
+  /헤어/i,
+  /두피/i,
+  /\bshampoo\b/i,
+  /\bconditioner\b/i,
+  /\bhair\s*treatment\b/i,
+  /\bhair\b/i,
+  /\bscalp\b/i,
+  /\bno[\s-]*wash\b/i,
+] as const
+
+const DOMESTIC_BODY_PATTERNS = [
+  /바디/i,
+  /샤워/i,
+  /바스/i,
+  /워시/i,
+  /\bbody\b/i,
+  /\bshower\b/i,
+  /\bbath\b/i,
+] as const
+
+const DOMESTIC_OTHER_CARE_PATTERNS = [
+  /핸드/i,
+  /풋/i,
+  /발뒤꿈치/i,
+  /네일/i,
+  /유아/i,
+  /베이비/i,
+  /키즈/i,
+  /\bhand\b/i,
+  /\bfoot\b/i,
+  /\bheel\b/i,
+  /\bnail\b/i,
+  /\bbaby\b/i,
+  /\bkids?\b/i,
+  /\bmulti\s*balm\b/i,
+] as const
+
+const GLOBAL_MAKEUP_CATEGORY_RULES = [
+  { category: 'mascara', patterns: [/\bmascara\b/i] },
+  { category: 'eyeshadow', patterns: [/\beye\s*shadow\b/i, /\beyeshadow\b/i, /아이\s*섀도/i, /아이\s*쉐도/i] },
+  { category: 'blush', patterns: [/\bblush\b/i, /\bcheek\b/i, /블러셔/i, /치크/i] },
+  {
+    category: 'foundation',
+    patterns: [/\bfoundation\b/i, /\bcushion\b/i, /\bbb\b/i, /\bcover\b/i, /파운데이션/i, /쿠션/i],
+  },
+  { category: 'lip', patterns: [/\blip\b/i, /\btint\b/i, /\bgloss\b/i, /\blip\s*balm\b/i, /립/i] },
+] as const
+
+const DOMESTIC_MAKEUP_CATEGORY_RULES = [
+  { category: '마스카라', patterns: [/\bmascara\b/i, /마스카라/i] },
+  {
+    category: '아이섀도',
+    patterns: [/\beye\s*shadow\b/i, /\beyeshadow\b/i, /아이\s*섀도/i, /아이\s*쉐도/i],
+  },
+  { category: '블러셔', patterns: [/\bblush\b/i, /\bcheek\b/i, /블러셔/i, /치크/i] },
+  {
+    category: '파운데이션',
+    patterns: [/\bfoundation\b/i, /\bcushion\b/i, /\bbb\b/i, /\bcover\b/i, /파운데이션/i, /쿠션/i],
+  },
+  { category: '립', patterns: [/\blip\b/i, /\btint\b/i, /\bgloss\b/i, /\blip\s*balm\b/i, /립/i] },
+] as const
 
 function decodeGlobalCategoryPath(value: string) {
   return value
@@ -179,6 +339,33 @@ export function isGlobalSunCarePrimaryProductName(value: string) {
   ])
 }
 
+export function isGlobalHairPrimaryProductName(value: string) {
+  const primaryName = extractPrimaryProductName(value)
+
+  if (hasAnyKeyword(primaryName, GLOBAL_OTHER_CARE_PATTERNS)) {
+    return false
+  }
+
+  return hasAnyKeyword(primaryName, [...GLOBAL_HAIR_PATTERNS])
+}
+
+export function isGlobalBodyPrimaryProductName(value: string) {
+  const primaryName = extractPrimaryProductName(value)
+
+  if (
+    hasAnyKeyword(primaryName, GLOBAL_OTHER_CARE_PATTERNS) ||
+    hasAnyKeyword(primaryName, [...GLOBAL_HAIR_PATTERNS])
+  ) {
+    return false
+  }
+
+  return hasAnyKeyword(primaryName, [...GLOBAL_BODY_PATTERNS])
+}
+
+export function isOtherCarePrimaryProductName(value: string) {
+  return hasAnyKeyword(extractPrimaryProductName(value), [...GLOBAL_OTHER_CARE_PATTERNS])
+}
+
 export function isGlobalBodyHairPrimaryProductName(value: string) {
   return hasAnyKeyword(extractPrimaryProductName(value), [
     /\bbody\s*lotion\b/i,
@@ -226,6 +413,18 @@ export function isGlobalMakeupPrimaryProductName(value: string) {
     /\blip\s*(tint|stick|gloss|balm)\b/i,
     /\baegyo-sal\b/i,
   ])
+}
+
+export function resolveGlobalMakeupCategory(name: string) {
+  const primaryName = extractPrimaryProductName(name)
+
+  for (const rule of GLOBAL_MAKEUP_CATEGORY_RULES) {
+    if (hasAnyKeyword(primaryName, rule.patterns)) {
+      return rule.category
+    }
+  }
+
+  return null
 }
 
 export function isGlobalMaskPrimaryProductName(value: string) {
@@ -309,7 +508,9 @@ export function isGlobalMoisturizerPrimaryProductName(value: string, fallbackCat
 export function resolveGlobalSkincareCategory<T extends string>(
   name: string,
   fallbackCategory: T
-): T | 'toner' | 'moisturizer' | 'sun_care' | 'body_hair' | 'eye_cream' | 'foundation' | 'mask' {
+): T | 'toner' | 'moisturizer' | 'sun_care' | 'body_hair' | 'eye_cream' | 'foundation' | 'mask' | 'cleanser' | 'serum' | 'cream' {
+  const primaryName = extractPrimaryProductName(name)
+
   if (isTonerPrimaryProductName(name)) {
     return 'toner'
   }
@@ -338,5 +539,159 @@ export function resolveGlobalSkincareCategory<T extends string>(
     return 'moisturizer'
   }
 
+  if (hasAnyKeyword(primaryName, [...GLOBAL_CLEANSER_PATTERNS])) {
+    return 'cleanser' as T | 'cleanser'
+  }
+
+  if (hasAnyKeyword(primaryName, [...GLOBAL_SERUM_PATTERNS])) {
+    return 'serum' as T | 'serum'
+  }
+
+  if (hasAnyKeyword(primaryName, [...GLOBAL_CREAM_PATTERNS])) {
+    return 'cream' as T | 'cream'
+  }
+
   return fallbackCategory
+}
+
+export function resolveDomesticSkincareCategory(name: string) {
+  const primaryName = extractPrimaryProductName(name)
+
+  if (isTonerPrimaryProductName(primaryName)) {
+    return 'Toner'
+  }
+
+  if (isGlobalSunCarePrimaryProductName(primaryName)) {
+    return 'Sun Care'
+  }
+
+  if (isGlobalMaskPrimaryProductName(primaryName) || /패드/i.test(primaryName)) {
+    return 'Face Mask'
+  }
+
+  if (/\beye\s*cream\b/i.test(primaryName) || /아이크림/i.test(primaryName)) {
+    return '아이크림'
+  }
+
+  if (hasAnyKeyword(primaryName, [...GLOBAL_CLEANSER_PATTERNS])) {
+    return 'Cleanser'
+  }
+
+  if (hasAnyKeyword(primaryName, [...GLOBAL_SERUM_PATTERNS])) {
+    return 'Serum'
+  }
+
+  if (isGlobalMoisturizerPrimaryProductName(primaryName)) {
+    return 'Moisturizer'
+  }
+
+  if (hasAnyKeyword(primaryName, [...GLOBAL_CREAM_PATTERNS])) {
+    return 'Cream'
+  }
+
+  if (/에센스/i.test(primaryName)) {
+    return 'Serum'
+  }
+
+  return null
+}
+
+export function resolveDomesticMakeupCategory(name: string) {
+  const primaryName = extractPrimaryProductName(name)
+
+  for (const rule of DOMESTIC_MAKEUP_CATEGORY_RULES) {
+    if (hasAnyKeyword(primaryName, rule.patterns)) {
+      return rule.category
+    }
+  }
+
+  return null
+}
+
+export function isDomesticHairPrimaryProductName(value: string) {
+  const primaryName = extractPrimaryProductName(value)
+
+  if (hasAnyKeyword(primaryName, [...DOMESTIC_OTHER_CARE_PATTERNS])) {
+    return false
+  }
+
+  return hasAnyKeyword(primaryName, [...DOMESTIC_HAIR_PATTERNS])
+}
+
+export function isDomesticBodyPrimaryProductName(value: string) {
+  const primaryName = extractPrimaryProductName(value)
+
+  if (
+    hasAnyKeyword(primaryName, [...DOMESTIC_OTHER_CARE_PATTERNS]) ||
+    hasAnyKeyword(primaryName, [...DOMESTIC_HAIR_PATTERNS])
+  ) {
+    return false
+  }
+
+  return hasAnyKeyword(primaryName, [...DOMESTIC_BODY_PATTERNS])
+}
+
+export function isDomesticOtherCarePrimaryProductName(value: string) {
+  return hasAnyKeyword(extractPrimaryProductName(value), [...DOMESTIC_OTHER_CARE_PATTERNS])
+}
+
+export function resolveCareCleanupTargetCategory(
+  name: string,
+  affiliateUrl: string | null | undefined
+) {
+  const isGlobal = isGlobalOliveYoungUrl(affiliateUrl)
+
+  if (isGlobal) {
+    if (isGlobalHairPrimaryProductName(name)) {
+      return 'hair'
+    }
+
+    if (isGlobalBodyPrimaryProductName(name)) {
+      return 'body'
+    }
+
+    const globalMakeupCategory = resolveGlobalMakeupCategory(name)
+
+    if (globalMakeupCategory) {
+      return globalMakeupCategory
+    }
+
+    const globalSkincareCategory = resolveGlobalSkincareCategory(name, 'body_hair')
+
+    if (globalSkincareCategory !== 'body_hair') {
+      return globalSkincareCategory
+    }
+
+    if (isOtherCarePrimaryProductName(name)) {
+      return 'other_care'
+    }
+
+    return 'other_care'
+  }
+
+  if (isDomesticHairPrimaryProductName(name)) {
+    return 'Hair'
+  }
+
+  if (isDomesticBodyPrimaryProductName(name)) {
+    return 'Body'
+  }
+
+  if (isDomesticOtherCarePrimaryProductName(name)) {
+    return 'other_care'
+  }
+
+  const domesticSkincareCategory = resolveDomesticSkincareCategory(name)
+
+  if (domesticSkincareCategory) {
+    return domesticSkincareCategory
+  }
+
+  const domesticMakeupCategory = resolveDomesticMakeupCategory(name)
+
+  if (domesticMakeupCategory) {
+    return domesticMakeupCategory
+  }
+
+  return 'other_care'
 }

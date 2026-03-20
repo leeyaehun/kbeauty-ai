@@ -21,6 +21,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   'Sun Care': 'Sun Care',
   Hair: 'Hair',
   Body: 'Body',
+  hair: 'Hair',
+  body: 'Body',
   moisturizer: 'Moisturizer',
   세럼: 'Serum',
   크림: 'Cream',
@@ -33,7 +35,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   헤어에센스: 'Hair',
   바디로션: 'Body',
   바디워시: 'Body',
-  핸드크림: 'Body',
 }
 
 const POPULAR_PICK_TEXT = 'Popular K-Beauty pick'

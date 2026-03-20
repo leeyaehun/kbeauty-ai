@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium, type Page } from 'playwright'
 
 import { embedMissingProducts } from './embed-products'
-import { resolveGlobalSkincareCategory } from './category-utils'
+import { resolveCareCleanupTargetCategory, resolveGlobalSkincareCategory } from './category-utils'
 import { fetchGlobalProductCategoryPath } from './global-oliveyoung-detail'
 import {
   USER_AGENT,
@@ -40,7 +40,7 @@ type GlobalCategory = (typeof GLOBAL_CATEGORIES)[number]
 type ProductCandidate = {
   affiliateUrl: string
   brand: string
-  category: GlobalCategory['key']
+  category: string
   imageUrl: string
   name: string
   price: number
@@ -288,7 +288,10 @@ async function processCategory(
 
       for (const [url, candidate] of pageCandidates.entries()) {
         if (!categoryCandidates.has(url)) {
-          let resolvedCategory = resolveGlobalSkincareCategory(candidate.name, category.key)
+          let resolvedCategory =
+            category.key === 'body_hair'
+              ? resolveCareCleanupTargetCategory(candidate.name, candidate.affiliateUrl)
+              : resolveGlobalSkincareCategory(candidate.name, category.key)
 
           if (category.key === 'serum') {
             try {
@@ -346,7 +349,7 @@ async function processCategory(
     )
 
     sessionUrls.add(globalUrl)
-    bumpReport(candidate.category, action)
+    bumpReport(category.key, action)
     processed += 1
 
     if (processed % 25 === 0) {
