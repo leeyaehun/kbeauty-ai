@@ -3,11 +3,13 @@ import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
 
 import { getProductPricePresentation, type PriceCurrencyCode } from '@/lib/pricing'
+import { isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 
 const MATCH_COUNT = 6
 const MIN_MATCH_SCORE = 0.6
 const QUERY_TIMEOUT_MS = 12000
 const MAX_VECTOR_CANDIDATES = 2500
+const DEFAULT_REGION: ShoppingRegion = 'korea'
 const DEFAULT_CATEGORIES = ['Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Cleanser', 'Sun Care', 'Hair', 'Body']
 const POPULAR_PICK_CATEGORIES = new Set(['Hair', 'Body'])
 const CATEGORY_ALIASES: Record<string, string[]> = {
@@ -38,6 +40,8 @@ type RecommendedProduct = {
   similarity?: number | null
 }
 
+type ProductRegion = ShoppingRegion
+
 type CandidateProductRow = {
   id: string
   name: string | null
@@ -49,9 +53,10 @@ type CandidateProductRow = {
   image_url: string | null
   skin_profile: unknown
   embedding?: string | null
+  similarity?: number | null
 }
 
-function isMissingGlobalAffiliateUrlColumn(error: unknown) {
+function isMissingColumn(error: unknown, columnName: string) {
   if (!error || typeof error !== 'object') {
     return false
   }
@@ -59,7 +64,23 @@ function isMissingGlobalAffiliateUrlColumn(error: unknown) {
   const code = 'code' in error ? error.code : null
   const message = 'message' in error ? error.message : null
 
-  return code === '42703' && typeof message === 'string' && message.includes('global_affiliate_url')
+  return code === '42703' && typeof message === 'string' && message.includes(columnName)
+}
+
+function isMissingGlobalAffiliateUrlColumn(error: unknown) {
+  return isMissingColumn(error, 'global_affiliate_url')
+}
+
+function normalizeRegion(value: unknown): ProductRegion {
+  return isShoppingRegion(value) ? value : DEFAULT_REGION
+}
+
+function applyRegionFilter<T extends {
+  like: (column: string, pattern: string) => T
+}>(query: T, region: ProductRegion) {
+  return region === 'global'
+    ? query.like('affiliate_url', '%global.oliveyoung%')
+    : query.like('affiliate_url', '%oliveyoung.co.kr%')
 }
 
 function createServiceRoleSupabaseClient() {
@@ -181,6 +202,7 @@ function normalizeCandidateRows(rows: unknown) {
       image_url: typeof row.image_url === 'string' ? row.image_url : null,
       skin_profile: row.skin_profile ?? null,
       embedding: typeof row.embedding === 'string' ? row.embedding : null,
+      similarity: typeof row.similarity === 'number' ? row.similarity : Number(row.similarity ?? 0) || null,
     }
   }).filter((row) => row.id.length > 0)
 }
@@ -188,16 +210,20 @@ function normalizeCandidateRows(rows: unknown) {
 async function selectProducts(
   supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
   categories: string[],
+  region: ProductRegion,
   columns: string,
   limit?: number,
   signal?: AbortSignal,
   requirePositivePrice = false
 ) {
-  let fullQuery = supabase
+  let fullQuery = applyRegionFilter(
+    supabase
     .from('products')
     .select(columns)
     .in('category', categories)
-    .not('embedding', 'is', null)
+    .not('embedding', 'is', null),
+    region
+  )
 
   if (requirePositivePrice) {
     fullQuery = fullQuery.gt('price', 0)
@@ -234,6 +260,7 @@ async function selectProducts(
     .select(columns.replace(', global_affiliate_url', ''))
     .in('category', categories)
     .not('embedding', 'is', null)
+  fallbackQuery = applyRegionFilter(fallbackQuery, region)
 
   if (requirePositivePrice) {
     fallbackQuery = fallbackQuery.gt('price', 0)
@@ -268,13 +295,17 @@ async function selectProducts(
 async function countSearchCandidates(
   supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
   categories: string[],
+  region: ProductRegion,
   signal?: AbortSignal
 ) {
-  let query = supabase
+  let query = applyRegionFilter(
+    supabase
     .from('products')
     .select('id', { count: 'exact', head: true })
     .in('category', categories)
-    .not('embedding', 'is', null)
+    .not('embedding', 'is', null),
+    region
+  )
 
   if (signal) {
     query = query.abortSignal(signal)
@@ -314,15 +345,73 @@ function normalizeMatchScore(similarity: unknown) {
   return Number((MIN_MATCH_SCORE + weighted * 0.39).toFixed(4))
 }
 
+async function matchProductsByRpc(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+  queryEmbedding: number[],
+  categoryFilters: Array<string | null>,
+  region: ProductRegion,
+  signal?: AbortSignal
+) {
+  const responses = await Promise.all(
+    categoryFilters.map((categoryFilter) => {
+      let query = supabase.rpc('match_products', {
+        query_embedding: queryEmbedding,
+        category_filter: categoryFilter,
+        region_filter: region,
+        match_count: MATCH_COUNT,
+      })
+
+      if (signal) {
+        query = query.abortSignal(signal)
+      }
+
+      return query
+    })
+  )
+
+  const dedupedProducts = new Map<string, RecommendedProduct>()
+
+  for (const response of responses) {
+    if (response.error) {
+      throw response.error
+    }
+
+    for (const product of normalizeCandidateRows(response.data)) {
+      const nextProduct: RecommendedProduct = {
+        id: product.id,
+        name: product.name,
+        brand: product.brand,
+        price: product.price,
+        category: product.category,
+        image_url: product.image_url,
+        skin_profile: product.skin_profile,
+        affiliate_url: product.affiliate_url,
+        global_affiliate_url: product.global_affiliate_url,
+        similarity: product.similarity,
+      }
+      const existingProduct = dedupedProducts.get(nextProduct.id)
+
+      if (!existingProduct || (nextProduct.similarity ?? 0) > (existingProduct.similarity ?? 0)) {
+        dedupedProducts.set(nextProduct.id, nextProduct)
+      }
+    }
+  }
+
+  return Array.from(dedupedProducts.values())
+    .sort((left, right) => (right.similarity ?? 0) - (left.similarity ?? 0))
+    .slice(0, MATCH_COUNT)
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { analysisResult, category } = await req.json()
+    const { analysisResult, category, region } = await req.json()
 
     if (!analysisResult) {
       return NextResponse.json({ error: 'Analysis result is missing.' }, { status: 400 })
     }
 
     const selectedCategory = typeof category === 'string' ? category : null
+    const selectedRegion = normalizeRegion(region)
     const searchCategories = resolveSearchCategories(selectedCategory)
     const supabase = createServiceRoleSupabaseClient()
 
@@ -331,6 +420,7 @@ export async function POST(req: NextRequest) {
         selectProducts(
           supabase,
           searchCategories,
+          selectedRegion,
           'id, name, brand, price, category, affiliate_url, global_affiliate_url, image_url, skin_profile',
           undefined,
           signal,
@@ -379,6 +469,7 @@ export async function POST(req: NextRequest) {
         selectProducts(
           supabase,
           searchCategories,
+          selectedRegion,
           'id, name, brand, price, category, affiliate_url, global_affiliate_url, image_url, skin_profile',
           120,
           signal
@@ -400,8 +491,20 @@ export async function POST(req: NextRequest) {
     let recommendedProducts: RecommendedProduct[] = []
 
     try {
+      const rpcCategoryFilters = selectedCategory ? searchCategories : [null]
+
+      recommendedProducts = await withQueryTimeout((signal) =>
+        matchProductsByRpc(
+          supabase,
+          userEmbedding,
+          rpcCategoryFilters,
+          selectedRegion,
+          signal
+        )
+      )
+
       const { count, error: countError } = await withQueryTimeout((signal) =>
-        countSearchCandidates(supabase, searchCategories, signal)
+        countSearchCandidates(supabase, searchCategories, selectedRegion, signal)
       )
 
       if (countError) {
@@ -412,7 +515,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ products: [] })
       }
 
-      if ((count ?? 0) > MAX_VECTOR_CANDIDATES) {
+      if (recommendedProducts.length > 0) {
+        // Prefer the DB-side regional matcher when available, but keep a direct-query fallback below.
+      } else if ((count ?? 0) > MAX_VECTOR_CANDIDATES) {
         console.warn(
           `Skipping vector similarity search for ${count} candidates in ${searchCategories.join(', ')}`
         )
@@ -422,6 +527,7 @@ export async function POST(req: NextRequest) {
           selectProducts(
             supabase,
             searchCategories,
+            selectedRegion,
             'id, name, brand, price, category, affiliate_url, global_affiliate_url, image_url, skin_profile, embedding',
             count ?? MAX_VECTOR_CANDIDATES,
             signal

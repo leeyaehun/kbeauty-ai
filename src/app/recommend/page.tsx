@@ -32,7 +32,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   핸드크림: 'Body',
 }
 
-const GLOBAL_OLIVEYOUNG_HOME_URL = 'https://global.oliveyoung.com/'
 const POPULAR_PICK_TEXT = 'Popular K-Beauty pick'
 
 type Product = {
@@ -75,7 +74,7 @@ export default function RecommendPage() {
   const [loading, setLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const [region, setRegion] = useState<Region>('global')
+  const [region, setRegion] = useState<Region>('korea')
   const [regionReady, setRegionReady] = useState(false)
 
   const categories = ['Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Cleanser', 'Sun Care', 'Hair', 'Body']
@@ -86,7 +85,7 @@ export default function RecommendPage() {
     if (isShoppingRegion(storedRegion)) {
       setRegion(storedRegion)
     } else {
-      setRegion('global')
+      setRegion('korea')
     }
 
     setRegionReady(true)
@@ -116,7 +115,7 @@ export default function RecommendPage() {
         const res = await fetch('/api/recommend', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ analysisResult, category: selectedCategory })
+          body: JSON.stringify({ analysisResult, category: selectedCategory, region })
         })
 
         const data = await res.json()
@@ -133,11 +132,9 @@ export default function RecommendPage() {
             if (region === 'global') {
               return {
                 ...product,
-                display_affiliate_url: product.global_affiliate_url ?? GLOBAL_OLIVEYOUNG_HOME_URL,
+                display_affiliate_url: product.global_affiliate_url ?? product.affiliate_url,
                 display_link_region: 'global' as const,
-                display_button_label: product.global_affiliate_url
-                  ? 'Shop on Olive Young Global'
-                  : 'Search on Olive Young Global',
+                display_button_label: 'Shop on Olive Young Global',
               }
             }
 

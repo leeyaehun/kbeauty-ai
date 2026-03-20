@@ -89,6 +89,37 @@ function isMissingGlobalAffiliateUrlColumn(error: unknown) {
   )
 }
 
+function isMissingRegionColumn(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const code = 'code' in error ? error.code : null
+  const message = 'message' in error ? error.message : null
+
+  return (
+    (code === '42703' && typeof message === 'string' && message.includes('region')) ||
+    (typeof message === 'string' && message.includes('region'))
+  )
+}
+
+function removeUnsupportedColumns<T extends Record<string, unknown>>(row: T, error: unknown) {
+  const nextRow = { ...row }
+  let changed = false
+
+  if (isMissingGlobalAffiliateUrlColumn(error) && 'global_affiliate_url' in nextRow) {
+    delete nextRow.global_affiliate_url
+    changed = true
+  }
+
+  if (isMissingRegionColumn(error) && 'region' in nextRow) {
+    delete nextRow.region
+    changed = true
+  }
+
+  return changed ? nextRow : null
+}
+
 function isDuplicateProductNameError(error: unknown) {
   if (!error || typeof error !== 'object') {
     return false
@@ -257,26 +288,48 @@ async function upsertProduct(row: Record<string, unknown>) {
   }
 
   if (existingUrlQuery.data?.id) {
-    const { global_affiliate_url, ...fallbackPayload } = row
-    const updateResult = await supabase
-      .from('products')
-      .update(fallbackPayload)
-      .eq('id', existingUrlQuery.data.id)
+    let nextRow = { ...row }
 
-    if (updateResult.error) {
-      throw new Error(`Failed to update ${url}: ${updateResult.error.message}`)
+    while (true) {
+      const updateResult = await supabase
+        .from('products')
+        .update(nextRow)
+        .eq('id', existingUrlQuery.data.id)
+
+      if (!updateResult.error) {
+        break
+      }
+
+      const fallbackRow = removeUnsupportedColumns(nextRow, updateResult.error)
+
+      if (!fallbackRow) {
+        throw new Error(`Failed to update ${url}: ${updateResult.error.message}`)
+      }
+
+      nextRow = fallbackRow
     }
 
     return 'updated'
   }
 
-  const fullInsert = await supabase.from('products').insert(row)
-  let error = fullInsert.error
+  let nextRow = { ...row }
+  let error: { message: string } | null = null
 
-  if (error && isMissingGlobalAffiliateUrlColumn(error)) {
-    const { global_affiliate_url, ...fallbackRow } = row
-    const fallbackInsert = await supabase.from('products').insert(fallbackRow)
-    error = fallbackInsert.error
+  while (true) {
+    const insertResult = await supabase.from('products').insert(nextRow)
+
+    if (!insertResult.error) {
+      return 'inserted'
+    }
+
+    const fallbackRow = removeUnsupportedColumns(nextRow, insertResult.error)
+
+    if (!fallbackRow) {
+      error = insertResult.error
+      break
+    }
+
+    nextRow = fallbackRow
   }
 
   if (error && isDuplicateProductNameError(error) && productName) {
@@ -291,14 +344,25 @@ async function upsertProduct(row: Record<string, unknown>) {
     }
 
     if (existingByName?.id) {
-      const { global_affiliate_url, ...fallbackPayload } = row
-      const updateResult = await supabase
-        .from('products')
-        .update(fallbackPayload)
-        .eq('id', existingByName.id)
+      let duplicateRow = { ...row }
 
-      if (updateResult.error) {
-        throw new Error(`Failed to update duplicate ${productName}: ${updateResult.error.message}`)
+      while (true) {
+        const updateResult = await supabase
+          .from('products')
+          .update(duplicateRow)
+          .eq('id', existingByName.id)
+
+        if (!updateResult.error) {
+          break
+        }
+
+        const fallbackRow = removeUnsupportedColumns(duplicateRow, updateResult.error)
+
+        if (!fallbackRow) {
+          throw new Error(`Failed to update duplicate ${productName}: ${updateResult.error.message}`)
+        }
+
+        duplicateRow = fallbackRow
       }
 
       return 'updated'
@@ -331,6 +395,7 @@ async function processCategory(
       ingredient_names: [] as string[],
       name: candidate.name,
       price: candidate.price,
+      region: 'global',
     }
 
     await upsertProduct(row)

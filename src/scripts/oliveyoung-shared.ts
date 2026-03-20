@@ -44,6 +44,7 @@ export type ExistingProductRefs = {
 }
 
 export type UpsertMode = 'domestic' | 'global'
+type ProductRegion = 'korea' | 'global'
 
 export function requireEnv(name: string) {
   const value = process.env[name]
@@ -157,7 +158,7 @@ export function normalizeGlobalProductUrl(url: string) {
   }
 }
 
-export function isMissingGlobalAffiliateUrlColumn(error: unknown) {
+function isMissingColumn(error: unknown, columnName: string) {
   if (!error || typeof error !== 'object') {
     return false
   }
@@ -166,9 +167,42 @@ export function isMissingGlobalAffiliateUrlColumn(error: unknown) {
   const message = 'message' in error ? error.message : null
 
   return (
-    (code === '42703' && typeof message === 'string' && message.includes('global_affiliate_url')) ||
-    (typeof message === 'string' && message.includes('global_affiliate_url'))
+    (code === '42703' && typeof message === 'string' && message.includes(columnName)) ||
+    (typeof message === 'string' && message.includes(columnName))
   )
+}
+
+export function isMissingGlobalAffiliateUrlColumn(error: unknown) {
+  return isMissingColumn(error, 'global_affiliate_url')
+}
+
+function isMissingRegionColumn(error: unknown) {
+  return isMissingColumn(error, 'region')
+}
+
+function resolveProductRegion(payload: ProductPayload): ProductRegion {
+  const candidateUrl = payload.global_affiliate_url ?? payload.affiliate_url
+
+  return typeof candidateUrl === 'string' && candidateUrl.includes('global.oliveyoung.com')
+    ? 'global'
+    : 'korea'
+}
+
+function removeUnsupportedProductColumns<T extends Record<string, unknown>>(payload: T, error: unknown) {
+  const nextPayload = { ...payload }
+  let changed = false
+
+  if (isMissingGlobalAffiliateUrlColumn(error) && 'global_affiliate_url' in nextPayload) {
+    delete nextPayload.global_affiliate_url
+    changed = true
+  }
+
+  if (isMissingRegionColumn(error) && 'region' in nextPayload) {
+    delete nextPayload.region
+    changed = true
+  }
+
+  return changed ? nextPayload : null
 }
 
 function isDuplicateProductNameError(error: unknown) {
@@ -269,6 +303,7 @@ function buildUpdatePayload(
       ingredient_names: existing.ingredient_names.length > 0 ? existing.ingredient_names : payload.ingredient_names,
       name: payload.name,
       price: payload.price > 0 ? payload.price : existing.price,
+      region: resolveProductRegion(payload),
     }
   }
 
@@ -281,31 +316,29 @@ function buildUpdatePayload(
     ingredient_names: payload.ingredient_names.length > 0 ? payload.ingredient_names : existing.ingredient_names,
     name: payload.name,
     price: payload.price > 0 ? payload.price : existing.price,
+    region: resolveProductRegion(payload),
   }
 }
 
 async function writeProductUpdate(id: string, updatePayload: Record<string, unknown>) {
-  const fullUpdate = await withSupabaseRetry(`update:${id}`, () =>
-    supabase.from('products').update(updatePayload).eq('id', id)
-  )
+  let nextPayload = updatePayload
 
-  if (!fullUpdate.error) {
-    return
-  }
+  while (true) {
+    const updateResult = await withSupabaseRetry(`update:${id}`, () =>
+      supabase.from('products').update(nextPayload).eq('id', id)
+    )
 
-  if (!isMissingGlobalAffiliateUrlColumn(fullUpdate.error)) {
-    throw new Error(`Failed to update ${id}: ${fullUpdate.error.message}`)
-  }
+    if (!updateResult.error) {
+      return
+    }
 
-  const fallbackPayload = Object.fromEntries(
-    Object.entries(updatePayload).filter(([key]) => key !== 'global_affiliate_url')
-  )
-  const fallbackUpdate = await withSupabaseRetry(`update-fallback:${id}`, () =>
-    supabase.from('products').update(fallbackPayload).eq('id', id)
-  )
+    const fallbackPayload = removeUnsupportedProductColumns(nextPayload, updateResult.error)
 
-  if (fallbackUpdate.error) {
-    throw new Error(`Failed to update ${id}: ${fallbackUpdate.error.message}`)
+    if (!fallbackPayload) {
+      throw new Error(`Failed to update ${id}: ${updateResult.error.message}`)
+    }
+
+    nextPayload = fallbackPayload
   }
 }
 
@@ -370,45 +403,32 @@ async function fetchInsertedProduct(payload: ProductPayload) {
 }
 
 async function writeProductInsert(payload: ProductPayload) {
-  const fullInsert = await withSupabaseRetry(`insert:${payload.name}`, () =>
-    supabase
-      .from('products')
-      .insert(payload)
-      .select('id, affiliate_url, global_affiliate_url, name, brand, category, image_url, ingredient_names, price')
-      .maybeSingle()
-  )
-
-  if (!fullInsert.error && fullInsert.data) {
-    return toExistingProductRecord(fullInsert.data)
+  let nextPayload: Record<string, unknown> = {
+    ...payload,
+    region: resolveProductRegion(payload),
   }
 
-  if (fullInsert.error && !isMissingGlobalAffiliateUrlColumn(fullInsert.error)) {
-    throw fullInsert.error
+  while (true) {
+    const insertResult = await withSupabaseRetry(`insert:${payload.name}`, () =>
+      supabase
+        .from('products')
+        .insert(nextPayload)
+        .select('id, affiliate_url, global_affiliate_url, name, brand, category, image_url, ingredient_names, price')
+        .maybeSingle()
+    )
+
+    if (!insertResult.error) {
+      return insertResult.data ? toExistingProductRecord(insertResult.data) : fetchInsertedProduct(payload)
+    }
+
+    const fallbackPayload = removeUnsupportedProductColumns(nextPayload, insertResult.error)
+
+    if (!fallbackPayload) {
+      throw insertResult.error
+    }
+
+    nextPayload = fallbackPayload
   }
-
-  const fallbackPayload = Object.fromEntries(
-    Object.entries(payload).filter(([key]) => key !== 'global_affiliate_url')
-  ) as Omit<ProductPayload, 'global_affiliate_url'>
-  const fallbackInsert = await withSupabaseRetry(`insert-fallback:${payload.name}`, () =>
-    supabase
-      .from('products')
-      .insert(fallbackPayload)
-      .select('id, affiliate_url, name, brand, category, image_url, ingredient_names, price')
-      .maybeSingle()
-  )
-
-  if (fallbackInsert.error) {
-    throw fallbackInsert.error
-  }
-
-  if (fallbackInsert.data) {
-    return toExistingProductRecord({
-      ...fallbackInsert.data,
-      global_affiliate_url: payload.global_affiliate_url ?? null,
-    })
-  }
-
-  return fetchInsertedProduct(payload)
 }
 
 export async function loadExistingProducts() {
