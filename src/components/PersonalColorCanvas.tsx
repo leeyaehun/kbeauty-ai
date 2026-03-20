@@ -162,9 +162,29 @@ type WheelSlice = {
 const HEX_COLOR_PATTERN = /^#([0-9A-F]{6})$/i
 const WHEEL_SLICE_COUNT = 20
 const PORTRAIT_CANVAS_HEIGHT_RATIO = 4 / 3
+const FACE_FRAME_RADIUS_X_RATIO = 0.225
+const FACE_FRAME_RADIUS_Y_MULTIPLIER = 1.35
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function isPointInsideEllipse(
+  pointX: number,
+  pointY: number,
+  centerX: number,
+  centerY: number,
+  radiusX: number,
+  radiusY: number
+) {
+  if (radiusX <= 0 || radiusY <= 0) {
+    return false
+  }
+
+  const normalizedX = (pointX - centerX) / radiusX
+  const normalizedY = (pointY - centerY) / radiusY
+
+  return normalizedX * normalizedX + normalizedY * normalizedY <= 1
 }
 
 function easeOutCubic(value: number) {
@@ -522,7 +542,8 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       const centerX = width / 2
       const centerY = height / 2
       const outerRadius = Math.max(width, height) * 0.82
-      const faceRadius = width * 0.19
+      const faceRadiusX = width * FACE_FRAME_RADIUS_X_RATIO
+      const faceRadiusY = faceRadiusX * FACE_FRAME_RADIUS_Y_MULTIPLIER
       const slices = buildWheelSlices(season, colors, avoidColors, selectedHex)
       const sliceAngle = (Math.PI * 2) / slices.length
 
@@ -532,7 +553,11 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
         const offsetY = event.clientY - bounds.top
         const distance = Math.hypot(offsetX - centerX, offsetY - centerY)
 
-        if (distance < faceRadius || distance > outerRadius || slices.length === 0) {
+        if (
+          isPointInsideEllipse(offsetX, offsetY, centerX, centerY, faceRadiusX, faceRadiusY)
+          || distance > outerRadius
+          || slices.length === 0
+        ) {
           return
         }
 
@@ -581,7 +606,9 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
       const centerX = width / 2
       const centerY = height / 2
       const outerRadius = Math.max(width, height) * 0.82
-      const faceRadius = width * 0.19
+      const faceRadiusX = width * FACE_FRAME_RADIUS_X_RATIO
+      const faceRadiusY = faceRadiusX * FACE_FRAME_RADIUS_Y_MULTIPLIER
+      const faceOuterRadius = Math.max(faceRadiusX, faceRadiusY)
       const totalSlices = slices.length
       const sliceAngle = (Math.PI * 2) / totalSlices
       const tryOnHex = isValidHexColor(selectedHex) ? selectedHex.toUpperCase() : null
@@ -596,7 +623,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
         context.fillStyle = background
         context.fillRect(0, 0, width, height)
 
-        const glow = context.createRadialGradient(centerX, centerY, faceRadius * 0.82, centerX, centerY, outerRadius)
+        const glow = context.createRadialGradient(centerX, centerY, faceOuterRadius * 0.82, centerX, centerY, outerRadius)
         glow.addColorStop(0, 'rgba(255,255,255,0.08)')
         glow.addColorStop(1, 'rgba(255,255,255,0)')
         context.fillStyle = glow
@@ -604,7 +631,7 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
 
         const animationProgress = clamp(elapsedMs / 1000, 0, 1)
         const radiusProgress = easeOutCubic(animationProgress)
-        const activeRadius = faceRadius + (outerRadius - faceRadius) * radiusProgress
+        const activeRadius = faceOuterRadius + (outerRadius - faceOuterRadius) * radiusProgress
 
         for (let index = 0; index < totalSlices; index += 1) {
           const slice = slices[index]
@@ -621,31 +648,32 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
 
         context.save()
         context.beginPath()
-        context.arc(centerX, centerY, faceRadius, 0, Math.PI * 2)
+        context.ellipse(centerX, centerY, faceRadiusX, faceRadiusY, 0, 0, Math.PI * 2)
         context.closePath()
         context.clip()
 
-        const sourceSize = Math.min(Math.min(image.naturalWidth, image.naturalHeight), crop.radius * 2.45)
-        const sourceX = clamp(crop.centerX - sourceSize / 2, 0, Math.max(0, image.naturalWidth - sourceSize))
-        const sourceY = clamp(crop.centerY - sourceSize / 2, 0, Math.max(0, image.naturalHeight - sourceSize))
+        const sourceWidth = Math.min(image.naturalWidth, crop.radius * 2.3)
+        const sourceHeight = Math.min(image.naturalHeight, crop.radius * 3)
+        const sourceX = clamp(crop.centerX - sourceWidth / 2, 0, Math.max(0, image.naturalWidth - sourceWidth))
+        const sourceY = clamp(crop.centerY - sourceHeight / 2, 0, Math.max(0, image.naturalHeight - sourceHeight))
 
         context.drawImage(
           image,
           sourceX,
           sourceY,
-          sourceSize,
-          sourceSize,
-          centerX - faceRadius,
-          centerY - faceRadius,
-          faceRadius * 2,
-          faceRadius * 2
+          sourceWidth,
+          sourceHeight,
+          centerX - faceRadiusX,
+          centerY - faceRadiusY,
+          faceRadiusX * 2,
+          faceRadiusY * 2
         )
         context.restore()
 
         context.strokeStyle = 'rgba(255,255,255,0.98)'
         context.lineWidth = 5
         context.beginPath()
-        context.arc(centerX, centerY, faceRadius + 3, 0, Math.PI * 2)
+        context.ellipse(centerX, centerY, faceRadiusX + 3, faceRadiusY + 3, 0, 0, Math.PI * 2)
         context.stroke()
 
         context.strokeStyle = 'rgba(45,27,47,0.06)'

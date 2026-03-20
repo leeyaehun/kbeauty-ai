@@ -10,11 +10,12 @@ type ProductLinkType = 'oliveyoung_global' | 'brand_site' | 'search'
 
 type MakeupProduct = {
   brand: string
+  image_url: string | null
+  link_type: ProductLinkType
   name: string
+  product_url: string
   reason: string
   shade: string
-  product_url: string
-  link_type: ProductLinkType
 }
 
 type MakeupProductSection = {
@@ -22,7 +23,7 @@ type MakeupProductSection = {
   products: MakeupProduct[]
 }
 
-type MakeupProductSeed = Omit<MakeupProduct, 'product_url' | 'link_type'>
+type MakeupProductSeed = Omit<MakeupProduct, 'image_url' | 'link_type' | 'product_url'>
 
 type PersonalColorResult = {
   season: 'spring_warm' | 'summer_cool' | 'autumn_warm' | 'winter_cool'
@@ -53,6 +54,7 @@ const SEASON_BRANDS: Record<PersonalColorResult['season'], string[]> = {
 const MAKEUP_CATEGORIES: MakeupCategoryKey[] = ['foundation', 'lip', 'blush', 'eyeshadow']
 
 type ProductLookupRow = {
+  image_url: string | null
   brand: string | null
   name: string | null
   category: string | null
@@ -332,6 +334,7 @@ function buildFallbackProductRecommendations(
         ...section,
         products: section.products.map((product) => ({
           ...product,
+          image_url: null,
           product_url: buildOliveYoungSearchUrl(product.brand, product.name),
           link_type: 'search' as const,
         })),
@@ -353,6 +356,7 @@ function normalizeMakeupSection(value: unknown, fallback: MakeupProductSection):
           const product = item as Record<string, unknown>
           return {
             brand: typeof product.brand === 'string' ? product.brand : '',
+            image_url: typeof product.image_url === 'string' ? product.image_url : null,
             name: typeof product.name === 'string' ? product.name : '',
             reason: typeof product.reason === 'string' ? product.reason : '',
             shade: typeof product.shade === 'string' ? product.shade : '',
@@ -448,6 +452,7 @@ function resolveProductLinks(
         if (matchedRow?.global_affiliate_url || matchedRow?.affiliate_url) {
           return {
             ...product,
+            image_url: matchedRow.image_url ?? null,
             product_url: matchedRow.global_affiliate_url ?? matchedRow.affiliate_url ?? buildOliveYoungSearchUrl(product.brand, product.name),
             link_type: 'oliveyoung_global' as const,
           }
@@ -456,6 +461,7 @@ function resolveProductLinks(
         if (hasBrandGlobalUrl(product.brand)) {
           return {
             ...product,
+            image_url: null,
             product_url: getBrandGlobalUrl(product.brand, product.name),
             link_type: 'brand_site' as const,
           }
@@ -463,6 +469,7 @@ function resolveProductLinks(
 
         return {
           ...product,
+          image_url: null,
           product_url: buildOliveYoungSearchUrl(product.brand, product.name),
           link_type: 'search' as const,
         }
@@ -476,7 +483,7 @@ function resolveProductLinks(
 async function loadMakeupProductLinks(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
   const fullQuery = await supabase
     .from('products')
-    .select('brand, name, category, affiliate_url, global_affiliate_url')
+    .select('brand, name, category, affiliate_url, global_affiliate_url, image_url')
     .in('category', MAKEUP_CATEGORIES)
 
   if (!fullQuery.error) {
@@ -495,7 +502,7 @@ async function loadMakeupProductLinks(supabase: Awaited<ReturnType<typeof create
 
   const fallbackQuery = await supabase
     .from('products')
-    .select('brand, name, category, affiliate_url')
+    .select('brand, name, category, affiliate_url, image_url')
     .in('category', MAKEUP_CATEGORIES)
 
   if (fallbackQuery.error) {
@@ -507,6 +514,7 @@ async function loadMakeupProductLinks(supabase: Awaited<ReturnType<typeof create
 
   return {
     data: (fallbackQuery.data ?? []).map((product) => ({
+      image_url: product.image_url,
       brand: product.brand,
       name: product.name,
       category: product.category,

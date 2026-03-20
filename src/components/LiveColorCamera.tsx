@@ -16,6 +16,8 @@ type LiveColorCameraProps = {
 const CANVAS_ASPECT_RATIO = 4 / 3
 const FACE_DETECTION_CONFIDENCE = 0.6
 const MAX_MISSED_DETECTION_FRAMES = 18
+const FACE_FRAME_RADIUS_X_RATIO = 0.225
+const FACE_FRAME_RADIUS_Y_MULTIPLIER = 1.35
 
 type FaceCrop = {
   centerX: number
@@ -139,8 +141,6 @@ export default function LiveColorCamera({
       streamRef.current?.getTracks().forEach((track) => track.stop())
       streamRef.current = null
     }
-
-    void startCameraAndDetector()
   }, [])
 
   useEffect(() => {
@@ -221,7 +221,8 @@ export default function LiveColorCamera({
 
       const centerX = width / 2
       const centerY = height / 2
-      const faceRadius = width * 0.19
+      const faceRadiusX = width * FACE_FRAME_RADIUS_X_RATIO
+      const faceRadiusY = faceRadiusX * FACE_FRAME_RADIUS_Y_MULTIPLIER
 
       context.clearRect(0, 0, width, height)
       context.fillStyle = selectedColor?.hex ?? backgroundHex
@@ -238,25 +239,30 @@ export default function LiveColorCamera({
 
         const fallbackCrop = createDefaultVideoCrop(video)
         const activeCrop = cropRef.current ?? fallbackCrop
-        const sourceSize = clamp(
-          activeCrop.radius * 2,
-          Math.min(video.videoWidth, video.videoHeight) * 0.35,
-          Math.min(video.videoWidth, video.videoHeight) * 0.84
+        const sourceWidth = clamp(
+          activeCrop.radius * 1.9,
+          Math.min(video.videoWidth, video.videoHeight) * 0.28,
+          Math.min(video.videoWidth, video.videoHeight) * 0.76
+        )
+        const sourceHeight = clamp(
+          activeCrop.radius * 2.55,
+          Math.min(video.videoWidth, video.videoHeight) * 0.42,
+          video.videoHeight * 0.9
         )
         const sourceX = clamp(
-          activeCrop.centerX - sourceSize / 2,
+          activeCrop.centerX - sourceWidth / 2,
           0,
-          Math.max(0, video.videoWidth - sourceSize)
+          Math.max(0, video.videoWidth - sourceWidth)
         )
         const sourceY = clamp(
-          activeCrop.centerY - sourceSize / 2,
+          activeCrop.centerY - sourceHeight / 2,
           0,
-          Math.max(0, video.videoHeight - sourceSize)
+          Math.max(0, video.videoHeight - sourceHeight)
         )
 
         context.save()
         context.beginPath()
-        context.arc(centerX, centerY, faceRadius, 0, Math.PI * 2)
+        context.ellipse(centerX, centerY, faceRadiusX, faceRadiusY, 0, 0, Math.PI * 2)
         context.closePath()
         context.clip()
         context.translate(width, 0)
@@ -265,19 +271,19 @@ export default function LiveColorCamera({
           video,
           sourceX,
           sourceY,
-          sourceSize,
-          sourceSize,
-          width - (centerX + faceRadius),
-          centerY - faceRadius,
-          faceRadius * 2,
-          faceRadius * 2
+          sourceWidth,
+          sourceHeight,
+          width - (centerX + faceRadiusX),
+          centerY - faceRadiusY,
+          faceRadiusX * 2,
+          faceRadiusY * 2
         )
         context.restore()
 
         context.strokeStyle = 'rgba(255,255,255,0.95)'
         context.lineWidth = 4
         context.beginPath()
-        context.arc(centerX, centerY, faceRadius + 2, 0, Math.PI * 2)
+        context.ellipse(centerX, centerY, faceRadiusX + 2, faceRadiusY + 2, 0, 0, Math.PI * 2)
         context.stroke()
       }
 

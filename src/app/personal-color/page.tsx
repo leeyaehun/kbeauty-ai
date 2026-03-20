@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Camera } from 'lucide-react'
+import { Camera, ImageUp, RotateCcw } from 'lucide-react'
 
 import LiveColorCamera from '@/components/LiveColorCamera'
 import PersonalColorCanvas, {
@@ -14,22 +14,22 @@ import PersonalColorCanvas, {
 import UpgradeModal from '@/components/UpgradeModal'
 import { createClient } from '@/lib/supabase'
 
-type MakeupCategoryKey = 'foundation' | 'lip' | 'blush' | 'eyeshadow'
-type ProductLinkType = 'oliveyoung_global' | 'brand_site' | 'search'
-
 type MakeupProduct = {
   brand: string
+  image_url: string | null
+  link_type: 'oliveyoung_global' | 'brand_site' | 'search'
   name: string
   reason: string
   shade: string
   product_url: string
-  link_type: ProductLinkType
 }
 
 type MakeupProductSection = {
   tip: string
   products: MakeupProduct[]
 }
+
+type CameraPreviewState = 'idle' | 'requesting' | 'ready' | 'error'
 
 type PersonalColorResult = {
   season: PersonalColorSeason
@@ -45,7 +45,7 @@ type PersonalColorResult = {
     eyeshadow: string
   }
   celebrity_examples: string[]
-  product_recommendations: Record<MakeupCategoryKey, MakeupProductSection>
+  product_recommendations: Record<'foundation' | 'lip' | 'blush' | 'eyeshadow', MakeupProductSection>
 }
 
 const SEASON_META: Record<
@@ -83,38 +83,9 @@ const SEASON_META: Record<
   },
 }
 
-const MAKEUP_TABS: Array<{ key: MakeupCategoryKey, label: string }> = [
-  { key: 'foundation', label: 'Foundation' },
-  { key: 'lip', label: 'Lip' },
-  { key: 'blush', label: 'Blush' },
-  { key: 'eyeshadow', label: 'Eyeshadow' },
-]
-
-function buildOliveYoungSearchUrl(brand: string, name: string) {
-  const url = new URL('https://global.oliveyoung.com/display/search')
-  url.searchParams.set('query', `${brand} ${name}`.trim())
-  return url.toString()
-}
-
-function getProductButtonMeta(linkType: ProductLinkType) {
-  switch (linkType) {
-    case 'oliveyoung_global':
-      return {
-        className: 'bg-[#1a4660] text-white hover:bg-[#14354a]',
-        label: 'Shop on Olive Young Global',
-      }
-    case 'brand_site':
-      return {
-        className: 'bg-[#9e5746] text-white hover:bg-[#824636]',
-        label: 'Shop on Brand Site',
-      }
-    default:
-      return {
-        className: 'bg-[#edf1f5] text-[#445267] hover:bg-[#dce4ed]',
-        label: 'Search on Olive Young',
-      }
-  }
-}
+const MAX_CAPTURE_BYTES = 1024 * 1024
+const PERSONAL_COLOR_CAPTURED_IMAGE_KEY = 'personalColorCapturedImage'
+const PERSONAL_COLOR_RESULT_KEY = 'personalColorResult'
 
 function buildPageBackground(hex: string) {
   return `
@@ -153,11 +124,119 @@ async function dataUrlToFile(dataUrl: string, fileName: string) {
   return new File([blob], fileName, { type: blob.type || 'image/png' })
 }
 
+function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('We couldn’t process your photo. Please try again.'))
+        return
+      }
+
+      resolve(blob)
+    }, 'image/jpeg', quality)
+  })
+}
+
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+        return
+      }
+
+      reject(new Error('We couldn’t prepare your photo for upload.'))
+    }
+
+    reader.onerror = () => {
+      reject(new Error('A photo read error occurred while saving your image.'))
+    }
+
+    reader.readAsDataURL(blob)
+  })
+}
+
+function loadImageFromDataUrl(dataUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image()
+
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('We couldn’t open that image. Please choose another photo.'))
+    image.src = dataUrl
+  })
+}
+
+async function compressCanvasForUpload(sourceCanvas: HTMLCanvasElement) {
+  const scales = [1, 0.9, 0.8, 0.7, 0.6]
+  const qualities = [0.82, 0.72, 0.62, 0.52, 0.42]
+  let smallestBlob: Blob | null = null
+
+  for (const scale of scales) {
+    const targetCanvas = document.createElement('canvas')
+    targetCanvas.width = Math.max(320, Math.round(sourceCanvas.width * scale))
+    targetCanvas.height = Math.max(320, Math.round(sourceCanvas.height * scale))
+
+    const targetContext = targetCanvas.getContext('2d')
+
+    if (!targetContext) {
+      throw new Error('We couldn’t prepare your image for compression.')
+    }
+
+    targetContext.drawImage(sourceCanvas, 0, 0, targetCanvas.width, targetCanvas.height)
+
+    for (const quality of qualities) {
+      const blob = await canvasToBlob(targetCanvas, quality)
+
+      if (!smallestBlob || blob.size < smallestBlob.size) {
+        smallestBlob = blob
+      }
+
+      if (blob.size <= MAX_CAPTURE_BYTES) {
+        return blobToDataUrl(blob)
+      }
+    }
+  }
+
+  if (!smallestBlob) {
+    throw new Error('We couldn’t compress your image.')
+  }
+
+  if (smallestBlob.size > MAX_CAPTURE_BYTES) {
+    throw new Error('Your photo is still too large to upload. Please try another image.')
+  }
+
+  return blobToDataUrl(smallestBlob)
+}
+
+async function compressUploadedFile(file: File) {
+  const rawDataUrl = await blobToDataUrl(file)
+  const image = await loadImageFromDataUrl(rawDataUrl)
+  const canvas = document.createElement('canvas')
+  canvas.width = image.naturalWidth
+  canvas.height = image.naturalHeight
+
+  const context = canvas.getContext('2d')
+
+  if (!context) {
+    throw new Error('We couldn’t prepare your uploaded photo.')
+  }
+
+  context.drawImage(image, 0, 0)
+  return compressCanvasForUpload(canvas)
+}
+
 export default function PersonalColorPage() {
   const router = useRouter()
   const canvasRef = useRef<PersonalColorCanvasHandle | null>(null)
-  const [activeTab, setActiveTab] = useState<MakeupCategoryKey>('foundation')
+  const captureCanvasRef = useRef<HTMLCanvasElement>(null)
+  const captureVideoRef = useRef<HTMLVideoElement>(null)
+  const uploadInputRef = useRef<HTMLInputElement>(null)
+  const captureStreamRef = useRef<MediaStream | null>(null)
   const [capturedImage, setCapturedImage] = useState('')
+  const [cameraPreviewState, setCameraPreviewState] = useState<CameraPreviewState>('idle')
+  const [cameraMessage, setCameraMessage] = useState('')
   const [error, setError] = useState('')
   const [isSharing, setIsSharing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -167,6 +246,147 @@ export default function PersonalColorPage() {
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showLiveCamera, setShowLiveCamera] = useState(false)
   const [wheelAnimationVersion, setWheelAnimationVersion] = useState(0)
+
+  function stopCaptureStream() {
+    captureStreamRef.current?.getTracks().forEach((track) => track.stop())
+    captureStreamRef.current = null
+
+    if (captureVideoRef.current) {
+      captureVideoRef.current.srcObject = null
+    }
+  }
+
+  async function analyzePersonalColor(imageData: string) {
+    setLoading(true)
+    setError('')
+    setCapturedImage(imageData)
+    setResult(null)
+    setSelectedColor(null)
+    setShowLiveCamera(false)
+    setWheelAnimationVersion((value) => value + 1)
+
+    try {
+      const response = await fetch('/api/personal-color', {
+        body: JSON.stringify({ imageBase64: imageData }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || 'Personal color analysis failed.')
+        return
+      }
+
+      setResult(data)
+      sessionStorage.setItem(PERSONAL_COLOR_RESULT_KEY, JSON.stringify(data))
+    } catch {
+      setError('A network error occurred while analyzing your personal color.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handlePersonalColorImage(imageData: string) {
+    sessionStorage.setItem(PERSONAL_COLOR_CAPTURED_IMAGE_KEY, imageData)
+    stopCaptureStream()
+    setCameraPreviewState('idle')
+    setCameraMessage('')
+    await analyzePersonalColor(imageData)
+  }
+
+  async function handleOpenCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraPreviewState('error')
+      setCameraMessage('Camera access required')
+      return
+    }
+
+    try {
+      setCameraPreviewState('requesting')
+      setCameraMessage('')
+      stopCaptureStream()
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          height: { ideal: 960 },
+          width: { ideal: 720 },
+        },
+      })
+
+      captureStreamRef.current = stream
+
+      if (captureVideoRef.current) {
+        captureVideoRef.current.srcObject = stream
+        await captureVideoRef.current.play()
+      }
+
+      setCameraPreviewState('ready')
+    } catch {
+      setCameraPreviewState('error')
+      setCameraMessage('Camera access required')
+    }
+  }
+
+  async function handleCameraCapture() {
+    const video = captureVideoRef.current
+    const canvas = captureCanvasRef.current
+
+    if (!video || !canvas) {
+      return
+    }
+
+    try {
+      setCameraMessage('')
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+
+      const context = canvas.getContext('2d')
+
+      if (!context) {
+        throw new Error('We couldn’t read the camera frame. Please try again.')
+      }
+
+      context.drawImage(video, 0, 0)
+      const imageData = await compressCanvasForUpload(canvas)
+      await handlePersonalColorImage(imageData)
+    } catch (captureError) {
+      setCameraPreviewState('error')
+      setCameraMessage(captureError instanceof Error ? captureError.message : 'We couldn’t save your photo.')
+    }
+  }
+
+  async function handleUploadChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!file) {
+      return
+    }
+
+    try {
+      setCameraMessage('')
+      const imageData = await compressUploadedFile(file)
+      await handlePersonalColorImage(imageData)
+    } catch (uploadError) {
+      setCameraPreviewState('error')
+      setCameraMessage(uploadError instanceof Error ? uploadError.message : 'We couldn’t use that photo.')
+    }
+  }
+
+  function resetPersonalColorFlow() {
+    stopCaptureStream()
+    sessionStorage.removeItem(PERSONAL_COLOR_CAPTURED_IMAGE_KEY)
+    sessionStorage.removeItem(PERSONAL_COLOR_RESULT_KEY)
+    setCapturedImage('')
+    setResult(null)
+    setSelectedColor(null)
+    setShowLiveCamera(false)
+    setError('')
+    setCameraPreviewState('idle')
+    setCameraMessage('')
+  }
 
   useEffect(() => {
     let isActive = true
@@ -218,6 +438,12 @@ export default function PersonalColorPage() {
   }, [])
 
   useEffect(() => {
+    return () => {
+      stopCaptureStream()
+    }
+  }, [])
+
+  useEffect(() => {
     if (!paramsReady) {
       return
     }
@@ -227,45 +453,17 @@ export default function PersonalColorPage() {
       return
     }
 
-    async function analyzePersonalColor() {
-      const imageData = sessionStorage.getItem('capturedImage')
+    const imageData = sessionStorage.getItem(PERSONAL_COLOR_CAPTURED_IMAGE_KEY)
 
-      if (!imageData) {
-        router.push('/analyze')
-        return
-      }
-
-      setCapturedImage(imageData)
-
-      try {
-        const response = await fetch('/api/personal-color', {
-          body: JSON.stringify({ imageBase64: imageData }),
-          headers: { 'Content-Type': 'application/json' },
-          method: 'POST',
-        })
-        const data = await response.json()
-
-        if (!response.ok) {
-          setError(data.error || 'Personal color analysis failed.')
-          return
-        }
-
-        setResult(data)
-      } catch {
-        setError('A network error occurred while analyzing your personal color.')
-      } finally {
-        setLoading(false)
-      }
+    if (!imageData) {
+      setLoading(false)
+      return
     }
 
-    analyzePersonalColor()
-  }, [paramsReady, router, showUpgrade])
+    void analyzePersonalColor(imageData)
+  }, [paramsReady, showUpgrade])
 
   const seasonMeta = result ? SEASON_META[result.season] : null
-  const activeRecommendation = useMemo(
-    () => (result ? result.product_recommendations[activeTab] : null),
-    [activeTab, result]
-  )
   const canvasColors = useMemo(
     () => (result ? buildCanvasColors(result.best_colors, result.season) : []),
     [result]
@@ -340,18 +538,150 @@ export default function PersonalColorPage() {
           <div className="brand-mark mx-auto">K-Beauty AI</div>
           <h1 className="mt-6 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Personal color is unavailable</h1>
           <p className="mt-4 text-base leading-7 text-[var(--muted)]">{error}</p>
-          <button
-            onClick={() => router.push('/results')}
-            className="brand-button-primary mt-8 px-8 py-4 font-semibold"
-          >
-            Back to Results
-          </button>
+          <div className="mt-8 flex flex-col gap-3">
+            <button
+              onClick={resetPersonalColorFlow}
+              className="brand-button-primary px-8 py-4 font-semibold"
+            >
+              Retake Personal Color Photo
+            </button>
+            <button
+              onClick={() => router.push('/')}
+              className="brand-button-secondary px-8 py-4 font-semibold"
+            >
+              Back to Home
+            </button>
+          </div>
         </div>
       </main>
     )
   }
 
-  if (!result || !seasonMeta || !activeRecommendation || !capturedImage) {
+  if (!capturedImage) {
+    return (
+      <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
+        <div className="brand-shell max-w-5xl">
+          <div className="mb-8 flex justify-center md:justify-start">
+            <div className="brand-mark">K-Beauty AI</div>
+          </div>
+
+          <section className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
+            <aside className="brand-card p-7 md:p-8">
+              <div className="brand-chip px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">
+                Personal color analysis
+              </div>
+              <h1 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+                Take a photo for your personal color
+              </h1>
+              <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
+                Personal color uses a separate photo from skincare analysis. Capture your face in soft light or upload a portrait to build your seasonal palette.
+              </p>
+
+              <div className="mt-8 space-y-4">
+                <div className="brand-card-soft p-5">
+                  <p className="text-sm font-semibold text-[#d94d82]">Best photo setup</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Face forward, natural light, minimal shadows, and a neutral background create the clearest color read.</p>
+                </div>
+                <div className="brand-card-soft p-5">
+                  <p className="text-sm font-semibold text-[#d94d82]">What happens next</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">We analyze your own personal color photo first, then let you test shades on that portrait and in live camera mode separately.</p>
+                </div>
+              </div>
+            </aside>
+
+            <section className="brand-card p-6 md:p-8">
+              {cameraPreviewState === 'ready' ? (
+                <div>
+                  <div className="relative mx-auto overflow-hidden rounded-[36px] border border-[rgba(255,107,157,0.22)] bg-[linear-gradient(180deg,rgba(255,255,255,0.65),rgba(255,240,245,0.9))] p-3 shadow-[0_28px_60px_rgba(149,64,109,0.14)]">
+                    <div className="relative aspect-[3/4] overflow-hidden rounded-[28px] bg-[#fde8f1]">
+                      <video
+                        ref={captureVideoRef}
+                        className="h-full w-full scale-x-[-1] object-cover"
+                        playsInline
+                        muted
+                      />
+                      <div className="pointer-events-none absolute inset-5 rounded-[26px] border-[3px] border-white/70" />
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={handleCameraCapture}
+                      className="brand-button-primary py-4 font-semibold"
+                    >
+                      Capture This Photo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        stopCaptureStream()
+                        setCameraPreviewState('idle')
+                        setCameraMessage('')
+                      }}
+                      className="brand-button-secondary py-4 font-semibold"
+                    >
+                      Cancel Camera
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <div className="mx-auto flex aspect-[3/4] max-w-md items-center justify-center rounded-[36px] border border-[rgba(255,107,157,0.18)] bg-[linear-gradient(180deg,rgba(255,255,255,0.85),rgba(255,240,245,0.95))] p-8 shadow-[0_28px_60px_rgba(149,64,109,0.1)]">
+                    <div>
+                      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#fff0f5] text-[#ff6b9d] shadow-[0_18px_34px_rgba(149,64,109,0.12)]">
+                        <Camera className="h-9 w-9" />
+                      </div>
+                      <h2 className="mt-6 text-2xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
+                        Your personal color portrait
+                      </h2>
+                      <p className="mx-auto mt-3 max-w-sm text-sm leading-7 text-[var(--muted)]">
+                        Start the camera for a fresh portrait or upload a photo. This image stays separate from your skincare analysis flow.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={handleOpenCamera}
+                      className="brand-button-primary inline-flex items-center justify-center gap-2 py-4 font-semibold"
+                    >
+                      <Camera className="h-4 w-4" />
+                      {cameraPreviewState === 'requesting' ? 'Opening Camera...' : 'Open Camera'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => uploadInputRef.current?.click()}
+                      className="brand-button-secondary inline-flex items-center justify-center gap-2 py-4 font-semibold"
+                    >
+                      <ImageUp className="h-4 w-4" />
+                      Upload Photo
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {cameraMessage ? (
+                <p className="mt-4 text-center text-sm font-medium text-[#d94d82]">{cameraMessage}</p>
+              ) : null}
+
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleUploadChange}
+              />
+              <canvas ref={captureCanvasRef} className="hidden" />
+            </section>
+          </section>
+        </div>
+      </main>
+    )
+  }
+
+  if (!result || !seasonMeta) {
     return null
   }
 
@@ -405,7 +735,7 @@ export default function PersonalColorPage() {
               />
             )}
 
-            <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
               <button
                 onClick={() => {
                   setSelectedColor(null)
@@ -427,6 +757,15 @@ export default function PersonalColorPage() {
               >
                 <Camera className="h-4 w-4" />
                 Live Camera
+              </button>
+
+              <button
+                type="button"
+                onClick={resetPersonalColorFlow}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-[#2d1b2f]/10 bg-white/84 px-5 py-4 text-sm font-semibold text-[#5f4a61] transition hover:translate-y-[-1px]"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Retake Photo
               </button>
             </div>
 
@@ -471,59 +810,16 @@ export default function PersonalColorPage() {
           </div>
         </section>
 
-        <section className="mt-6 rounded-[34px] border border-white/70 bg-white/62 p-6 shadow-[0_24px_60px_rgba(60,43,57,0.1)] backdrop-blur-xl md:p-8">
-          <div className="max-w-2xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8c6d72]">Makeup Recommendations</p>
-            <p className="mt-3 text-sm leading-7 text-[#5f4a61]">
-              Keep the visual wheel expressive, then translate the same color logic into product choices below.
-            </p>
-          </div>
-
-          <div className="mt-6 flex flex-wrap gap-2">
-            {MAKEUP_TABS.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`rounded-full px-4 py-2.5 text-sm font-semibold transition ${
-                  activeTab === tab.key
-                    ? 'bg-[#2d1b2f] text-white shadow-[0_18px_32px_rgba(45,27,47,0.22)]'
-                    : 'border border-white/70 bg-white/82 text-[#5a4a5d] shadow-[0_12px_24px_rgba(60,43,57,0.08)]'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-6 rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.92),rgba(255,245,250,0.88))] p-5 shadow-[0_18px_34px_rgba(60,43,57,0.08)]">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8c6d72]">Color direction</p>
-            <p className="mt-3 text-sm leading-7 text-[#2d1b2f]">{activeRecommendation.tip}</p>
-          </div>
-
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            {activeRecommendation.products.map((product) => (
-              <article
-                key={`${activeTab}-${product.brand}-${product.name}-${product.shade}`}
-                className="rounded-[30px] border border-white/70 bg-white/84 p-5 shadow-[0_18px_38px_rgba(60,43,57,0.08)]"
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8c6d72]">{product.brand}</p>
-                <h3 className="mt-3 text-xl font-semibold tracking-[-0.04em] text-[#2d1b2f]">{product.name}</h3>
-                <div className="mt-4 inline-flex rounded-full bg-[#f7edf2] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#8b5061]">
-                  {product.shade}
-                </div>
-                <p className="mt-4 text-sm leading-7 text-[#5f4a61]">{product.reason}</p>
-                <a
-                  href={product.product_url || buildOliveYoungSearchUrl(product.brand, product.name)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`mt-5 inline-flex rounded-full px-5 py-3 text-center text-sm font-semibold transition ${getProductButtonMeta(product.link_type).className}`}
-                >
-                  {getProductButtonMeta(product.link_type).label}
-                </a>
-              </article>
-            ))}
-          </div>
-        </section>
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => router.push('/personal-color/makeup')}
+            className="flex w-full items-center justify-between rounded-full border border-pink-200 bg-white/84 px-6 py-4 font-semibold text-pink-500 shadow-[0_18px_34px_rgba(60,43,57,0.08)]"
+          >
+            <span>Makeup Recommendations</span>
+            <span>→</span>
+          </button>
+        </div>
 
         <section className="mt-6 rounded-[34px] border border-white/70 bg-white/62 p-6 shadow-[0_24px_60px_rgba(60,43,57,0.1)] backdrop-blur-xl">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

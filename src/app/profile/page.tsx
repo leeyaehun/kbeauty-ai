@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, Crown, Globe2, Heart, LogOut, Palette, ScrollText, Sparkles } from 'lucide-react'
+import { ChevronRight, Crown, Globe2, Heart, LogOut, ScrollText, Sparkles } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 
 import RegionModal from '@/components/RegionModal'
@@ -281,23 +281,6 @@ export default function ProfilePage() {
                   My Wishlist {wishlistCount > 0 ? `(${wishlistCount})` : ''}
                 </p>
                 <p className="mt-1 text-sm text-[var(--muted)]">Saved products ready for your next checkout.</p>
-              </div>
-            </div>
-            <ChevronRight className="h-5 w-5 text-[var(--muted)]" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => router.push('/personal-color')}
-            className="brand-card-soft flex items-center justify-between px-5 py-5 text-left"
-          >
-            <div className="flex items-center gap-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff0f5] text-[#d94d82]">
-                <Palette className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="font-semibold text-[var(--ink)]">My Personal Color</p>
-                <p className="mt-1 text-sm text-[var(--muted)]">Open your membership-powered color analysis.</p>
               </div>
             </div>
             <ChevronRight className="h-5 w-5 text-[var(--muted)]" />

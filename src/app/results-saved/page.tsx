@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
-
-import UpgradeModal from '@/components/UpgradeModal'
 import { createClient } from '@/lib/supabase'
 
 type ScoreSet = {
@@ -92,8 +90,6 @@ export default function ResultsSavedPage() {
   const [user, setUser] = useState<User | null>(null)
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
   const [error, setError] = useState('')
-  const [isProUser, setIsProUser] = useState(false)
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   useEffect(() => {
     let isActive = true
@@ -113,18 +109,13 @@ export default function ResultsSavedPage() {
         let nextResult: AnalysisResult | null = null
 
         if (currentUser) {
-          const [{ data: analysisData, error: analysisError }, { data: planData }] = await Promise.all([
+          const [{ data: analysisData, error: analysisError }] = await Promise.all([
             supabase
               .from('analyses')
               .select('skin_type, scores, concerns')
               .eq('user_id', currentUser.id)
               .order('created_at', { ascending: false })
               .limit(1),
-            supabase
-              .from('user_plans')
-              .select('plan')
-              .eq('user_id', currentUser.id)
-              .maybeSingle(),
           ])
 
           if (analysisError) {
@@ -132,12 +123,10 @@ export default function ResultsSavedPage() {
           }
 
           nextResult = normalizeAnalysisResult(analysisData?.[0] ?? null)
-          setIsProUser(planData?.plan === 'membership')
         } else {
           nextResult = normalizeAnalysisResult(
             safeParse<Record<string, unknown> | null>(sessionStorage.getItem('analysisResult'), null)
           )
-          setIsProUser(false)
         }
 
         if (!isActive) {
@@ -231,8 +220,6 @@ export default function ResultsSavedPage() {
 
   return (
     <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
-      <UpgradeModal open={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
-
       <div className="brand-shell">
         <div className="grid gap-6 lg:grid-cols-[0.88fr_1.12fr]">
           <aside className="space-y-6">
@@ -313,24 +300,6 @@ export default function ResultsSavedPage() {
                   className="brand-button-primary w-full py-4 font-semibold"
                 >
                   Personalized Product Recommendations
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (isProUser) {
-                      router.push('/personal-color')
-                      return
-                    }
-
-                    setShowUpgradeModal(true)
-                  }}
-                  className="brand-button-secondary w-full py-4 font-semibold"
-                >
-                  Discover Your Personal Color ✨
-                  <span className="ml-2 rounded-full bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">
-                    Membership
-                  </span>
                 </button>
 
                 {user ? (
