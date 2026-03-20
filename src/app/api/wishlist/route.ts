@@ -60,70 +60,12 @@ async function getAuthenticatedUser() {
   }
 }
 
-function isMissingWishlistTable(error: unknown) {
-  if (!error || typeof error !== 'object') {
-    return false
-  }
-
-  const code = 'code' in error ? error.code : null
-  const message = 'message' in error ? error.message : null
-
-  return (
-    code === 'PGRST205' ||
-    (typeof message === 'string' && message.includes("Could not find the table 'public.wishlists'"))
-  )
-}
-
-function normalizeProductIdsParam(value: string | null) {
-  if (!value) {
-    return []
-  }
-
-  return value
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-}
-
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const { databaseSupabase, user } = await getAuthenticatedUser()
 
     if (!user) {
       return NextResponse.json({ error: 'Please sign in to view your wishlist.' }, { status: 401 })
-    }
-
-    const fallbackProductIds = normalizeProductIdsParam(req.nextUrl.searchParams.get('productIds'))
-
-    if (fallbackProductIds.length > 0) {
-      const { data, error } = await databaseSupabase
-        .from('products')
-        .select(`
-          id,
-          name,
-          brand,
-          price,
-          category,
-          affiliate_url,
-          global_affiliate_url,
-          image_url
-        `)
-        .in('id', fallbackProductIds)
-
-      if (error) {
-        throw error
-      }
-
-      const items = (data ?? []).map((product) => ({
-        created_at: '',
-        product,
-        product_id: product.id,
-      }))
-
-      return NextResponse.json({
-        items,
-        productIds: items.map((entry) => entry.product_id),
-      })
     }
 
     const { data, error } = await databaseSupabase
@@ -146,13 +88,7 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: false })
 
     if (error) {
-      if (isMissingWishlistTable(error)) {
-        return NextResponse.json(
-          { error: 'Wishlist table is not available yet.', error_code: 'wishlist_table_missing' },
-          { status: 503 }
-        )
-      }
-
+      console.error('Wishlist GET failed:', error)
       throw error
     }
 
@@ -173,6 +109,7 @@ export async function GET(req: NextRequest) {
       productIds: items.map((entry) => entry.product_id),
     })
   } catch (error) {
+    console.error('Wishlist GET unexpected error:', error)
     return NextResponse.json(
       {
         error:
@@ -212,18 +149,17 @@ export async function POST(req: NextRequest) {
       )
 
     if (error) {
-      if (isMissingWishlistTable(error)) {
-        return NextResponse.json(
-          { error: 'Wishlist table is not available yet.', error_code: 'wishlist_table_missing' },
-          { status: 503 }
-        )
-      }
-
+      console.error('Wishlist POST failed:', {
+        error,
+        productId,
+        userId: user.id,
+      })
       throw error
     }
 
     return NextResponse.json({ ok: true })
   } catch (error) {
+    console.error('Wishlist POST unexpected error:', error)
     return NextResponse.json(
       {
         error:
@@ -257,18 +193,17 @@ export async function DELETE(req: NextRequest) {
       .eq('product_id', productId)
 
     if (error) {
-      if (isMissingWishlistTable(error)) {
-        return NextResponse.json(
-          { error: 'Wishlist table is not available yet.', error_code: 'wishlist_table_missing' },
-          { status: 503 }
-        )
-      }
-
+      console.error('Wishlist DELETE failed:', {
+        error,
+        productId,
+        userId: user.id,
+      })
       throw error
     }
 
     return NextResponse.json({ ok: true })
   } catch (error) {
+    console.error('Wishlist DELETE unexpected error:', error)
     return NextResponse.json(
       {
         error:

@@ -9,7 +9,6 @@ import ToastMessage from '@/components/ToastMessage'
 import { getProductPricePresentation, type PriceCurrencyCode } from '@/lib/pricing'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
-import { readWishlistProductIds, removeWishlistProductId } from '@/lib/wishlist-storage'
 
 type WishlistProduct = {
   affiliate_url: string | null
@@ -45,21 +44,6 @@ function getDisplayLink(product: WishlistProduct, region: Region) {
   }
 
   return product.affiliate_url
-}
-
-async function loadFallbackWishlistItems(productIds: string[]) {
-  if (productIds.length === 0) {
-    return [] as WishlistItem[]
-  }
-
-  const params = new URLSearchParams({
-    productIds: productIds.join(','),
-  })
-
-  const res = await fetch(`/api/wishlist?${params.toString()}`, { cache: 'no-store' })
-  const data = await res.json().catch(() => ({}))
-
-  return res.ok ? ((data.items ?? []) as WishlistItem[]) : []
 }
 
 export default function WishlistPage() {
@@ -103,10 +87,11 @@ export default function WishlistPage() {
 
       if (res.ok) {
         setItems((data.items ?? []) as WishlistItem[])
-      } else if (data.error_code === 'wishlist_table_missing') {
-        const fallbackProductIds = readWishlistProductIds(currentUser.id)
-        const fallbackItems = await loadFallbackWishlistItems(fallbackProductIds)
-        setItems(fallbackItems)
+      } else {
+        setItems([])
+        if (data.error) {
+          setToastMessage(data.error)
+        }
       }
 
       setLoading(false)
@@ -133,14 +118,6 @@ export default function WishlistPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-
-        if (res.status === 503 && data.error_code === 'wishlist_table_missing' && user) {
-          removeWishlistProductId(user.id, productId)
-          setItems((current) => current.filter((item) => item.product_id !== productId))
-          setToastMessage('Removed from wishlist')
-          return
-        }
-
         throw new Error(data.error || 'Failed to remove wishlist item.')
       }
 
