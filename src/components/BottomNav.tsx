@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Camera, Heart, Home, UserRound } from 'lucide-react'
+import { Heart, Home, Sparkles, UserRound } from 'lucide-react'
 
 const TABS = [
   {
@@ -12,10 +12,10 @@ const TABS = [
     match: (pathname: string) => pathname === '/',
   },
   {
-    href: '/analyze',
-    icon: Camera,
-    label: 'Analyze',
-    match: (pathname: string) => pathname.startsWith('/analyze'),
+    href: '/results-saved',
+    icon: Sparkles,
+    label: 'Results',
+    match: (pathname: string) => pathname.startsWith('/results-saved'),
   },
   {
     href: '/wishlist',
