@@ -67,12 +67,19 @@ type WheelSlice = {
   isAvoid: boolean
 }
 
+const HEX_COLOR_PATTERN = /^#([0-9A-F]{6})$/i
+const WHEEL_SLICE_COUNT = 20
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
 function easeOutCubic(value: number) {
   return 1 - Math.pow(1 - value, 3)
+}
+
+function isValidHexColor(hex: string | null | undefined): hex is string {
+  return typeof hex === 'string' && HEX_COLOR_PATTERN.test(hex.trim())
 }
 
 function hexToRgb(hex: string) {
@@ -108,19 +115,6 @@ function mixHexWithWhite(hex: string, weight: number) {
   const b = Math.round(rgb.b + (255 - rgb.b) * safeWeight)
 
   return `rgb(${r}, ${g}, ${b})`
-}
-
-function toGrayscale(hex: string) {
-  const rgb = hexToRgb(hex)
-
-  if (!rgb) {
-    return '#9CA3AF'
-  }
-
-  const luminance = Math.round(rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114)
-  const softened = Math.round(luminance * 0.78 + 36)
-
-  return `rgb(${softened}, ${softened}, ${softened})`
 }
 
 function mixHexWithBlack(hex: string, weight: number) {
@@ -295,7 +289,20 @@ async function detectFaceCrop(image: HTMLImageElement): Promise<CropFocus> {
 }
 
 function uniqueHexes(hexes: string[]) {
-  return [...new Set(hexes.filter(Boolean).map((hex) => hex.toUpperCase()))]
+  return [...new Set(hexes.filter(isValidHexColor).map((hex) => hex.toUpperCase()))]
+}
+
+function normalizeSeasonPalette(season: PersonalColorSeason) {
+  const validSeasonColors = uniqueHexes(SEASON_COLORS[season] ?? [])
+
+  if (validSeasonColors.length === 0) {
+    return Array.from({ length: WHEEL_SLICE_COUNT }, () => '#D94D82')
+  }
+
+  return Array.from(
+    { length: WHEEL_SLICE_COUNT },
+    (_, index) => validSeasonColors[index % validSeasonColors.length]
+  )
 }
 
 function buildWheelSlices(
@@ -304,14 +311,16 @@ function buildWheelSlices(
   avoidColors: PersonalColorSwatch[],
   selectedHex: string | null
 ): WheelSlice[] {
+  const seasonPalette = normalizeSeasonPalette(season)
   const preferredHexes = selectedHex
-    ? buildSelectedFamily(selectedHex)
+    ? buildSelectedFamily(selectedHex, season)
     : uniqueHexes([
         ...bestColors.map((color) => color.hex),
-        ...SEASON_COLORS[season],
-      ]).slice(0, 20)
+        ...seasonPalette,
+      ]).slice(0, WHEEL_SLICE_COUNT)
+  const safePreferredHexes = preferredHexes.length > 0 ? preferredHexes : seasonPalette
   const avoidHexes = uniqueHexes(avoidColors.map((color) => color.hex)).slice(0, 4)
-  const slices: WheelSlice[] = preferredHexes.map((hex) => ({ hex, isAvoid: false }))
+  const slices: WheelSlice[] = safePreferredHexes.map((hex) => ({ hex, isAvoid: false }))
 
   if (avoidHexes.length === 0) {
     return slices
@@ -320,7 +329,7 @@ function buildWheelSlices(
   for (let index = 0; index < avoidHexes.length; index += 1) {
     const insertAt = Math.min(
       slices.length,
-      Math.round(((preferredHexes.length + index) / avoidHexes.length) * (index + 1))
+      Math.round(((safePreferredHexes.length + index) / avoidHexes.length) * (index + 1))
     )
 
     slices.splice(insertAt, 0, {
@@ -332,15 +341,19 @@ function buildWheelSlices(
   return slices
 }
 
-function buildSelectedFamily(selectedHex: string) {
+function buildSelectedFamily(selectedHex: string, season: PersonalColorSeason) {
+  if (!isValidHexColor(selectedHex)) {
+    return normalizeSeasonPalette(season)
+  }
+
   const hsl = hexToHsl(selectedHex)
 
   if (!hsl) {
-    return uniqueHexes(Array.from({ length: 20 }, () => selectedHex)).slice(0, 20)
+    return normalizeSeasonPalette(season)
   }
 
-  return Array.from({ length: 20 }, (_, index) => {
-    const position = index / 19
+  return Array.from({ length: WHEEL_SLICE_COUNT }, (_, index) => {
+    const position = index / (WHEEL_SLICE_COUNT - 1)
     const hueShift = (position - 0.5) * 26
     const saturation = clamp(hsl.s + 12 - position * 18, 38, 96)
     const lightness = clamp(30 + position * 42, 22, 82)
@@ -480,10 +493,10 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
           context.moveTo(centerX, centerY)
           context.arc(centerX, centerY, activeRadius, startAngle, endAngle)
           context.closePath()
-          context.fillStyle = slice.isAvoid ? toGrayscale(slice.hex) : slice.hex
+          context.fillStyle = slice.hex
           context.fill()
-          context.strokeStyle = 'rgba(255,255,255,0.92)'
-          context.lineWidth = 2
+          context.strokeStyle = slice.isAvoid ? 'rgba(45,27,47,0.28)' : 'rgba(255,255,255,0.92)'
+          context.lineWidth = slice.isAvoid ? 3 : 2
           context.stroke()
         }
 
