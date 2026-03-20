@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Camera } from 'lucide-react'
 
+import LiveColorCamera from '@/components/LiveColorCamera'
 import PersonalColorCanvas, {
   type PersonalColorCanvasHandle,
   type PersonalColorSeason,
@@ -166,6 +168,7 @@ export default function PersonalColorPage() {
   const [result, setResult] = useState<PersonalColorResult | null>(null)
   const [selectedColor, setSelectedColor] = useState<PersonalColorSwatch | null>(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
+  const [showLiveCamera, setShowLiveCamera] = useState(false)
   const [wheelAnimationVersion, setWheelAnimationVersion] = useState(0)
 
   useEffect(() => {
@@ -383,27 +386,52 @@ export default function PersonalColorPage() {
           </div>
 
           <div className="mt-6">
-            <PersonalColorCanvas
-              animateVersion={wheelAnimationVersion}
-              ref={canvasRef}
-              avoidColors={result.avoid_colors}
-              backgroundHex={canvasBackground}
-              colors={canvasColors}
-              imageData={capturedImage}
-              onColorSelect={setSelectedColor}
-              selectedHex={selectedColor?.hex ?? null}
-              season={result.season}
-            />
+            {showLiveCamera ? (
+              <LiveColorCamera
+                backgroundHex={canvasBackground}
+                colors={canvasColors}
+                onClose={() => setShowLiveCamera(false)}
+                onColorSelect={setSelectedColor}
+                selectedColor={selectedColor}
+              />
+            ) : (
+              <PersonalColorCanvas
+                animateVersion={wheelAnimationVersion}
+                ref={canvasRef}
+                avoidColors={result.avoid_colors}
+                backgroundHex={canvasBackground}
+                colors={canvasColors}
+                imageData={capturedImage}
+                onColorSelect={setSelectedColor}
+                selectedHex={selectedColor?.hex ?? null}
+                season={result.season}
+              />
+            )}
 
-            <button
-              onClick={() => {
-                setSelectedColor(null)
-                setWheelAnimationVersion((value) => value + 1)
-              }}
-              className="mt-5 w-full rounded-full bg-[#FF6B9D] px-5 py-4 text-sm font-semibold text-white transition hover:translate-y-[-1px] hover:bg-[#e8588a]"
-            >
-              Reset to my colors
-            </button>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  setSelectedColor(null)
+                  setWheelAnimationVersion((value) => value + 1)
+                }}
+                className="rounded-full bg-[#FF6B9D] px-5 py-4 text-sm font-semibold text-white transition hover:translate-y-[-1px] hover:bg-[#e8588a]"
+              >
+                Reset to my colors
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowLiveCamera((value) => !value)}
+                className={`inline-flex items-center justify-center gap-2 rounded-full px-5 py-4 text-sm font-semibold transition hover:translate-y-[-1px] ${
+                  showLiveCamera
+                    ? 'bg-[#FF6B9D] text-white'
+                    : 'border border-[#FF6B9D] bg-white/84 text-[#FF6B9D]'
+                }`}
+              >
+                <Camera className="h-4 w-4" />
+                Live Camera
+              </button>
+            </div>
 
             <div
               className="mt-4 rounded-[24px] border border-white/70 p-4 shadow-[0_18px_34px_rgba(60,43,57,0.08)] transition-all duration-300"
