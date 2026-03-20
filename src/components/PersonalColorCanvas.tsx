@@ -495,9 +495,6 @@ const PersonalColorCanvas = forwardRef<PersonalColorCanvasHandle, PersonalColorC
           context.closePath()
           context.fillStyle = slice.hex
           context.fill()
-          context.strokeStyle = slice.isAvoid ? 'rgba(45,27,47,0.28)' : 'rgba(255,255,255,0.92)'
-          context.lineWidth = slice.isAvoid ? 3 : 2
-          context.stroke()
         }
 
         context.save()
