@@ -7,15 +7,32 @@ import { getProductPricePresentation, type PriceCurrencyCode } from '@/lib/prici
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
 
-const CATEGORY_KO: Record<string, string> = {
+const CATEGORY_LABELS: Record<string, string> = {
+  Toner: 'Toner',
+  Moisturizer: 'Moisturizer',
+  Serum: 'Serum',
+  Cream: 'Cream',
+  'Face Mask': 'Face Mask',
+  Cleanser: 'Cleanser',
+  'Sun Care': 'Sun Care',
+  Hair: 'Hair',
+  Body: 'Body',
   세럼: 'Serum',
   크림: 'Cream',
   토너: 'Toner',
   클렌저: 'Cleanser',
-  선케어: 'Suncare',
+  선케어: 'Sun Care',
+  마스크팩: 'Face Mask',
+  샴푸: 'Hair',
+  트리트먼트: 'Hair',
+  헤어에센스: 'Hair',
+  바디로션: 'Body',
+  바디워시: 'Body',
+  핸드크림: 'Body',
 }
 
 const GLOBAL_OLIVEYOUNG_HOME_URL = 'https://global.oliveyoung.com/'
+const POPULAR_PICK_TEXT = 'Popular K-Beauty pick'
 
 type Product = {
   id: string
@@ -38,6 +55,10 @@ type Product = {
 }
 
 type Region = ShoppingRegion
+
+function isPopularPickCategory(category: string | null | undefined) {
+  return category === 'Hair' || category === 'Body'
+}
 
 function getDisplayMatchScore(similarity: number | null | undefined) {
   return similarity ? Math.round(similarity * 100) : 60
@@ -77,7 +98,7 @@ export default function RecommendPage() {
   const [region, setRegion] = useState<Region>('global')
   const [regionReady, setRegionReady] = useState(false)
 
-  const categories = ['세럼', '크림', '토너', '클렌저', '선케어']
+  const categories = ['Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Cleanser', 'Sun Care', 'Hair', 'Body']
 
   useEffect(() => {
     const storedRegion = window.localStorage.getItem(REGION_STORAGE_KEY)
@@ -161,6 +182,10 @@ export default function RecommendPage() {
 
         const productsWithExplanation = await Promise.all(
           regionAwareProducts.map(async product => {
+            if (isPopularPickCategory(product.category)) {
+              return { ...product, explanation: POPULAR_PICK_TEXT }
+            }
+
             try {
               const explainRes = await fetch('/api/explain', {
                 method: 'POST',
@@ -252,13 +277,13 @@ export default function RecommendPage() {
           </div>
         </div>
 
-        <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
+        <div className="-mx-1 mb-6 flex gap-3 overflow-x-auto px-1 pb-3">
           <button
             onClick={() => setSelectedCategory(null)}
-            className={`rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap transition-all ${
+            className={`shrink-0 whitespace-nowrap rounded-full px-5 py-3 text-sm font-semibold transition-all ${
               selectedCategory === null
-                ? 'brand-button-primary'
-                : 'brand-button-secondary'
+                ? 'bg-[#ff6b9d] text-white shadow-[0_16px_28px_rgba(217,77,130,0.22)]'
+                : 'border border-[rgba(255,107,157,0.16)] bg-white/85 text-[var(--muted-strong)]'
             }`}
           >
             All
@@ -267,13 +292,13 @@ export default function RecommendPage() {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap transition-all ${
+              className={`shrink-0 whitespace-nowrap rounded-full px-5 py-3 text-sm font-semibold transition-all ${
                 selectedCategory === cat
-                  ? 'brand-button-primary'
-                  : 'brand-button-secondary'
+                  ? 'bg-[#ff6b9d] text-white shadow-[0_16px_28px_rgba(217,77,130,0.22)]'
+                  : 'border border-[rgba(255,107,157,0.16)] bg-white/85 text-[var(--muted-strong)]'
               }`}
             >
-              {CATEGORY_KO[cat]}
+              {CATEGORY_LABELS[cat] ?? cat}
             </button>
           ))}
         </div>
@@ -313,7 +338,7 @@ export default function RecommendPage() {
                           {product.brand}
                         </span>
                         <span className="rounded-full bg-[#fff0f5] px-3 py-1 text-xs font-semibold text-[#c89b3c]">
-                          {CATEGORY_KO[product.category] || product.category}
+                          {CATEGORY_LABELS[product.category] || product.category}
                         </span>
                       </div>
 

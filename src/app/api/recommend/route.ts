@@ -8,13 +8,18 @@ const MATCH_COUNT = 6
 const MIN_MATCH_SCORE = 0.6
 const QUERY_TIMEOUT_MS = 12000
 const MAX_VECTOR_CANDIDATES = 2500
-const DEFAULT_CATEGORIES = ['세럼', '크림', '토너', '클렌저', '선케어']
+const DEFAULT_CATEGORIES = ['Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Cleanser', 'Sun Care', 'Hair', 'Body']
+const POPULAR_PICK_CATEGORIES = new Set(['Hair', 'Body'])
 const CATEGORY_ALIASES: Record<string, string[]> = {
-  세럼: ['세럼', 'serum'],
-  크림: ['크림', 'cream'],
-  토너: ['토너', 'toner'],
-  클렌저: ['클렌저', 'cleanser'],
-  선케어: ['선케어', 'sun_care'],
+  Toner: ['Toner', '토너', 'toner'],
+  Moisturizer: ['Moisturizer', 'moisturizer'],
+  Serum: ['Serum', '세럼', 'serum'],
+  Cream: ['Cream', '크림', 'cream'],
+  'Face Mask': ['Face Mask', '마스크팩', 'mask'],
+  Cleanser: ['Cleanser', '클렌저', 'cleanser'],
+  'Sun Care': ['Sun Care', '선케어', 'sun_care'],
+  Hair: ['Hair', '샴푸', '트리트먼트', '헤어에센스'],
+  Body: ['Body', '바디로션', '바디워시', '핸드크림'],
 }
 
 type RecommendedProduct = {
@@ -94,6 +99,10 @@ function resolveSearchCategories(category: string | null) {
   }
 
   return DEFAULT_CATEGORIES.flatMap((entry) => CATEGORY_ALIASES[entry] ?? [entry])
+}
+
+function isPopularPickCategory(category: string | null) {
+  return typeof category === 'string' && POPULAR_PICK_CATEGORIES.has(category)
 }
 
 function shuffle<T>(values: T[]) {
@@ -181,13 +190,18 @@ async function selectProducts(
   categories: string[],
   columns: string,
   limit?: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  requirePositivePrice = false
 ) {
   let fullQuery = supabase
     .from('products')
     .select(columns)
     .in('category', categories)
     .not('embedding', 'is', null)
+
+  if (requirePositivePrice) {
+    fullQuery = fullQuery.gt('price', 0)
+  }
 
   if (signal) {
     fullQuery = fullQuery.abortSignal(signal)
@@ -220,6 +234,10 @@ async function selectProducts(
     .select(columns.replace(', global_affiliate_url', ''))
     .in('category', categories)
     .not('embedding', 'is', null)
+
+  if (requirePositivePrice) {
+    fallbackQuery = fallbackQuery.gt('price', 0)
+  }
 
   if (signal) {
     fallbackQuery = fallbackQuery.abortSignal(signal)
@@ -298,22 +316,63 @@ function normalizeMatchScore(similarity: unknown) {
 
 export async function POST(req: NextRequest) {
   try {
-    const openai = getOpenAIClient()
     const { analysisResult, category } = await req.json()
 
     if (!analysisResult) {
       return NextResponse.json({ error: 'Analysis result is missing.' }, { status: 400 })
     }
 
+    const selectedCategory = typeof category === 'string' ? category : null
+    const searchCategories = resolveSearchCategories(selectedCategory)
+    const supabase = createServiceRoleSupabaseClient()
+
+    if (isPopularPickCategory(selectedCategory)) {
+      const { data, error } = await withQueryTimeout((signal) =>
+        selectProducts(
+          supabase,
+          searchCategories,
+          'id, name, brand, price, category, affiliate_url, global_affiliate_url, image_url, skin_profile',
+          undefined,
+          signal,
+          true
+        )
+      )
+
+      if (error) {
+        throw error
+      }
+
+      const popularProducts = shuffle(data ?? [])
+        .slice(0, MATCH_COUNT)
+        .map((product) => ({
+          ...product,
+          similarity: MIN_MATCH_SCORE,
+        }))
+
+      const mergedPopularProducts = popularProducts.map((product) => {
+        const pricePresentation = getProductPricePresentation(product.price, product.category)
+
+        return {
+          ...product,
+          affiliate_url: product.affiliate_url ?? null,
+          currency_code: pricePresentation.currencyCode,
+          display_price: pricePresentation.displayPrice,
+          global_affiliate_url: product.global_affiliate_url ?? null,
+          price_minor_unit: pricePresentation.priceMinorUnit,
+          similarity: normalizeMatchScore(product.similarity),
+        }
+      })
+
+      return NextResponse.json({ products: mergedPopularProducts })
+    }
+
+    const openai = getOpenAIClient()
     const profileText = buildUserProfileText(analysisResult)
     const embeddingResponse = await openai.embeddings.create({
       model: 'text-embedding-3-small',
       input: profileText,
     })
     const userEmbedding = embeddingResponse.data[0].embedding
-
-    const searchCategories = resolveSearchCategories(category ?? null)
-    const supabase = createServiceRoleSupabaseClient()
 
     async function loadFallbackProducts() {
       const { data, error } = await withQueryTimeout((signal) =>
