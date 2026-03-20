@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { useState } from 'react'
 
 function getBrandInitial(brand: string | null | undefined) {
@@ -49,6 +50,7 @@ export type ProductCardProps = {
   imageUrl: string | null
   matchScore: number
   name: string
+  productAction?: ReactNode
 }
 
 export default function ProductCard({
@@ -61,6 +63,7 @@ export default function ProductCard({
   imageUrl,
   matchScore,
   name,
+  productAction,
 }: ProductCardProps) {
   return (
     <div className="brand-card overflow-hidden p-6 md:p-7">
@@ -73,13 +76,21 @@ export default function ProductCard({
           />
 
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="brand-chip px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">
-                {brand}
-              </span>
-              <span className="rounded-full bg-[#fff0f5] px-3 py-1 text-xs font-semibold text-[#c89b3c]">
-                {categoryLabel}
-              </span>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="brand-chip px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#d94d82]">
+                  {brand}
+                </span>
+                <span className="rounded-full bg-[#fff0f5] px-3 py-1 text-xs font-semibold text-[#c89b3c]">
+                  {categoryLabel}
+                </span>
+              </div>
+
+              {productAction ? (
+                <div className="shrink-0">
+                  {productAction}
+                </div>
+              ) : null}
             </div>
 
             <h2 className="mt-3 text-lg font-semibold leading-snug tracking-[-0.03em] text-[var(--ink)] md:text-xl">

@@ -1,9 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Heart } from 'lucide-react'
+import type { User } from '@supabase/supabase-js'
 
 import ProductCard from '@/components/ProductCard'
+import ToastMessage from '@/components/ToastMessage'
 import { getProductPricePresentation, type PriceCurrencyCode } from '@/lib/pricing'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
@@ -77,10 +80,15 @@ export default function RecommendPage() {
   const [error, setError] = useState('')
   const [region, setRegion] = useState<Region>('korea')
   const [regionReady, setRegionReady] = useState(false)
+  const [toastMessage, setToastMessage] = useState('')
+  const [user, setUser] = useState<User | null>(null)
+  const [wishlistIds, setWishlistIds] = useState<Set<string>>(new Set())
+  const [pendingWishlistIds, setPendingWishlistIds] = useState<Set<string>>(new Set())
 
   const categories = ['Cleanser', 'Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Sun Care', 'Hair', 'Body']
 
   useEffect(() => {
+    const supabase = createClient()
     const storedRegion = window.localStorage.getItem(REGION_STORAGE_KEY)
 
     if (isShoppingRegion(storedRegion)) {
@@ -89,8 +97,139 @@ export default function RecommendPage() {
       setRegion('korea')
     }
 
+    supabase.auth.getUser().then(({ data: { user: currentUser } }) => {
+      setUser(currentUser)
+    })
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_, session) => {
+      setUser(session?.user ?? null)
+    })
+
     setRegionReady(true)
+
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [])
+
+  useEffect(() => {
+    if (!toastMessage) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => setToastMessage(''), 2000)
+    return () => window.clearTimeout(timeoutId)
+  }, [toastMessage])
+
+  useEffect(() => {
+    let isActive = true
+
+    async function loadWishlist() {
+      if (!user) {
+        if (isActive) {
+          setWishlistIds(new Set())
+        }
+        return
+      }
+
+      try {
+        const res = await fetch('/api/wishlist', { cache: 'no-store' })
+
+        if (!res.ok) {
+          if (isActive) {
+            setWishlistIds(new Set())
+          }
+          return
+        }
+
+        const data = await res.json()
+
+        if (isActive) {
+          setWishlistIds(new Set((data.productIds ?? []) as string[]))
+        }
+      } catch {
+        if (isActive) {
+          setWishlistIds(new Set())
+        }
+      }
+    }
+
+    void loadWishlist()
+
+    return () => {
+      isActive = false
+    }
+  }, [user])
+
+  const pathnameForLogin = useMemo(() => {
+    if (selectedCategory) {
+      return '/recommend'
+    }
+
+    return '/recommend'
+  }, [selectedCategory])
+
+  async function handleWishlistToggle(productId: string) {
+    if (pendingWishlistIds.has(productId)) {
+      return
+    }
+
+    if (!user) {
+      setToastMessage('Sign in to save products')
+      window.setTimeout(() => {
+        router.push(`/login?redirect=${encodeURIComponent(pathnameForLogin)}`)
+      }, 450)
+      return
+    }
+
+    const isSaved = wishlistIds.has(productId)
+
+    setPendingWishlistIds((current) => new Set(current).add(productId))
+    setWishlistIds((current) => {
+      const next = new Set(current)
+      if (isSaved) {
+        next.delete(productId)
+      } else {
+        next.add(productId)
+      }
+      return next
+    })
+
+    try {
+      const res = await fetch('/api/wishlist', {
+        method: isSaved ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId }),
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update wishlist.')
+      }
+
+      setToastMessage(isSaved ? 'Removed from wishlist' : 'Added to wishlist')
+    } catch (error) {
+      setWishlistIds((current) => {
+        const next = new Set(current)
+        if (isSaved) {
+          next.add(productId)
+        } else {
+          next.delete(productId)
+        }
+        return next
+      })
+      setToastMessage(error instanceof Error ? error.message : 'Failed to update wishlist.')
+    } finally {
+      setPendingWishlistIds((current) => {
+        const next = new Set(current)
+        next.delete(productId)
+        return next
+      })
+    }
+  }
 
   useEffect(() => {
     let isActive = true
@@ -233,6 +372,8 @@ export default function RecommendPage() {
 
   return (
     <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
+      <ToastMessage message={toastMessage} />
+
       <div className="brand-shell">
         <div className="mb-8 flex justify-center md:justify-start">
           <div className="brand-mark">K-Beauty AI</div>
@@ -307,6 +448,21 @@ export default function RecommendPage() {
                   imageUrl={product.image_url}
                   matchScore={getDisplayMatchScore(product.similarity)}
                   name={product.name}
+                  productAction={(
+                    <button
+                      type="button"
+                      onClick={() => handleWishlistToggle(product.id)}
+                      disabled={pendingWishlistIds.has(product.id)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(255,107,157,0.16)] bg-white/90 transition hover:border-[rgba(255,107,157,0.34)] disabled:opacity-70"
+                      aria-label={wishlistIds.has(product.id) ? 'Remove from wishlist' : 'Add to wishlist'}
+                    >
+                      <Heart
+                        className="h-5 w-5"
+                        fill={wishlistIds.has(product.id) ? '#FF6B9D' : 'none'}
+                        color={wishlistIds.has(product.id) ? '#FF6B9D' : '#9ca3af'}
+                      />
+                    </button>
+                  )}
                 />
               )
             })

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, Crown, Globe2, LogOut, Palette, ScrollText, Sparkles } from 'lucide-react'
+import { ChevronRight, Crown, Globe2, Heart, LogOut, Palette, ScrollText, Sparkles } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 
 import RegionModal from '@/components/RegionModal'
@@ -45,6 +45,7 @@ export default function ProfilePage() {
   const [region, setRegion] = useState<ShoppingRegion>('korea')
   const [showRegionModal, setShowRegionModal] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [wishlistCount, setWishlistCount] = useState(0)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -60,15 +61,26 @@ export default function ProfilePage() {
       setUser(currentUser)
 
       if (currentUser) {
-        const { data: planData } = await supabase
-          .from('user_plans')
-          .select('plan')
-          .eq('user_id', currentUser.id)
-          .single()
+        const [{ data: planData }, wishlistRes] = await Promise.all([
+          supabase
+            .from('user_plans')
+            .select('plan')
+            .eq('user_id', currentUser.id)
+            .single(),
+          fetch('/api/wishlist', { cache: 'no-store' }),
+        ])
 
         setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
+
+        if (wishlistRes.ok) {
+          const wishlistData = await wishlistRes.json()
+          setWishlistCount(Array.isArray(wishlistData.items) ? wishlistData.items.length : 0)
+        } else {
+          setWishlistCount(0)
+        }
       } else {
         setPlan('free')
+        setWishlistCount(0)
       }
 
       const storedRegion = window.localStorage.getItem(REGION_STORAGE_KEY)
@@ -250,6 +262,25 @@ export default function ProfilePage() {
               <div>
                 <p className="font-semibold text-[var(--ink)]">My Skin History</p>
                 <p className="mt-1 text-sm text-[var(--muted)]">Review your past AI skin analyses.</p>
+              </div>
+            </div>
+            <ChevronRight className="h-5 w-5 text-[var(--muted)]" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push('/wishlist')}
+            className="brand-card-soft flex items-center justify-between px-5 py-5 text-left"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff0f5] text-[#d94d82]">
+                <Heart className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-[var(--ink)]">
+                  My Wishlist {wishlistCount > 0 ? `(${wishlistCount})` : ''}
+                </p>
+                <p className="mt-1 text-sm text-[var(--muted)]">Saved products ready for your next checkout.</p>
               </div>
             </div>
             <ChevronRight className="h-5 w-5 text-[var(--muted)]" />
