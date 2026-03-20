@@ -1,5 +1,5 @@
 export const CARE_SUBCATEGORIES = {
-  Hair: ['Damaged Hair', 'Hair Loss', 'Oily Scalp', 'Dry Scalp', 'Frizzy Hair', 'General'],
+  Hair: ['Damaged Hair', 'Hair Loss', 'Oily Scalp', 'Dry Scalp', 'Curl & Frizz', 'General'],
   Body: ['Dry Skin', 'Rough Skin', 'Sensitive Skin', 'Body Acne', 'General'],
   'Foot Care': ['Dry Heel', 'General'],
 } as const
@@ -140,8 +140,22 @@ export function deriveCareSubcategory(name: string | null | undefined, careCateg
       return 'Dry Scalp'
     }
 
-    if (hasKeyword(normalizedName, ['곱슬', 'frizz', '스무딩', 'smoothing'])) {
-      return 'Frizzy Hair'
+    if (
+      hasKeyword(normalizedName, [
+        '곱슬',
+        'frizz',
+        '스무딩',
+        'smoothing',
+        'curl cream',
+        'curling',
+        'wave',
+        'perm',
+        '웨이브',
+        '컬링',
+        '컬크림',
+      ])
+    ) {
+      return 'Curl & Frizz'
     }
 
     return 'General'
