@@ -256,6 +256,26 @@ export default function PersonalColorPage() {
     }
   }
 
+  async function attachCaptureStreamToVideo() {
+    const video = captureVideoRef.current
+    const stream = captureStreamRef.current
+
+    if (!video || !stream) {
+      return
+    }
+
+    if (video.srcObject !== stream) {
+      video.srcObject = stream
+    }
+
+    try {
+      await video.play()
+    } catch {
+      setCameraPreviewState('error')
+      setCameraMessage('Camera preview could not start. Please try again.')
+    }
+  }
+
   async function analyzePersonalColor(imageData: string) {
     setLoading(true)
     setError('')
@@ -316,12 +336,6 @@ export default function PersonalColorPage() {
       })
 
       captureStreamRef.current = stream
-
-      if (captureVideoRef.current) {
-        captureVideoRef.current.srcObject = stream
-        await captureVideoRef.current.play()
-      }
-
       setCameraPreviewState('ready')
     } catch {
       setCameraPreviewState('error')
@@ -442,6 +456,14 @@ export default function PersonalColorPage() {
       stopCaptureStream()
     }
   }, [])
+
+  useEffect(() => {
+    if (cameraPreviewState !== 'ready') {
+      return
+    }
+
+    void attachCaptureStreamToVideo()
+  }, [cameraPreviewState])
 
   useEffect(() => {
     if (!paramsReady) {
@@ -590,7 +612,7 @@ export default function PersonalColorPage() {
             </aside>
 
             <section className="brand-card p-6 md:p-8">
-              {cameraPreviewState === 'ready' ? (
+              {cameraPreviewState === 'requesting' || cameraPreviewState === 'ready' ? (
                 <div>
                   <div className="relative mx-auto overflow-hidden rounded-[36px] border border-[rgba(255,107,157,0.22)] bg-[linear-gradient(180deg,rgba(255,255,255,0.65),rgba(255,240,245,0.9))] p-3 shadow-[0_28px_60px_rgba(149,64,109,0.14)]">
                     <div className="relative aspect-[3/4] overflow-hidden rounded-[28px] bg-[#fde8f1]">
@@ -601,6 +623,14 @@ export default function PersonalColorPage() {
                         muted
                       />
                       <div className="pointer-events-none absolute inset-5 rounded-[26px] border-[3px] border-white/70" />
+                      {cameraPreviewState === 'requesting' ? (
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/78 backdrop-blur-sm">
+                          <div className="text-center">
+                            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[#ffb3d1]/60 border-t-[#ff6b9d]" />
+                            <p className="mt-4 text-sm font-semibold text-[#7c5d67]">Opening camera...</p>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
@@ -608,6 +638,7 @@ export default function PersonalColorPage() {
                     <button
                       type="button"
                       onClick={handleCameraCapture}
+                      disabled={cameraPreviewState !== 'ready'}
                       className="brand-button-primary py-4 font-semibold"
                     >
                       Capture This Photo
@@ -648,7 +679,7 @@ export default function PersonalColorPage() {
                       className="brand-button-primary inline-flex items-center justify-center gap-2 py-4 font-semibold"
                     >
                       <Camera className="h-4 w-4" />
-                      {cameraPreviewState === 'requesting' ? 'Opening Camera...' : 'Open Camera'}
+                      Open Camera
                     </button>
                     <button
                       type="button"
