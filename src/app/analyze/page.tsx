@@ -138,6 +138,21 @@ export default function AnalyzePage() {
   const [showCaptureAnyway, setShowCaptureAnyway] = useState(false)
   const router = useRouter()
 
+  const stopCameraStream = useCallback(() => {
+    const video = videoRef.current
+    const stream = video?.srcObject as MediaStream | null
+
+    if (!stream) {
+      return
+    }
+
+    stream.getTracks().forEach((track) => track.stop())
+    if (video) {
+      video.srcObject = null
+    }
+    setCameraReady(false)
+  }, [])
+
   useEffect(() => {
     async function startCamera() {
       try {
@@ -162,12 +177,9 @@ export default function AnalyzePage() {
     startCamera()
 
     return () => {
-      if (videoRef.current?.srcObject) {
-        const tracks = (videoRef.current.srcObject as MediaStream).getTracks()
-        tracks.forEach(t => t.stop())
-      }
+      stopCameraStream()
     }
-  }, [])
+  }, [stopCameraStream])
 
   useEffect(() => {
     if (!cameraReady) return
@@ -396,6 +408,7 @@ export default function AnalyzePage() {
         throw new Error('Your selfie wasn’t saved. Please check your browser storage and try again.')
       }
 
+      stopCameraStream()
       setStatus('captured')
       router.push('/survey')
     } catch (error) {
@@ -404,7 +417,7 @@ export default function AnalyzePage() {
     } finally {
       setIsCapturing(false)
     }
-  }, [faceDetected, isCapturing, router])
+  }, [faceDetected, isCapturing, router, stopCameraStream])
 
   return (
     <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
