@@ -7,7 +7,7 @@ const MEDIAPIPE_CPU_INFO_LOG = 'INFO: Created TensorFlow Lite XNNPACK delegate f
 const MAX_CAPTURE_BYTES = 1024 * 1024
 const MIN_FACE_DETECTION_CONFIDENCE = 0.3
 const FACE_DETECTION_FALLBACK_DELAY_MS = 5000
-const FACE_DETECTION_FULL_RANGE_FALLBACK_FRAMES = 36
+const FACE_DETECTION_STAGE_TRANSITION_FRAMES = 24
 const FACE_DETECTION_POSITIVE_CONFIRM_FRAMES = 2
 const FACE_DETECTION_NEGATIVE_CONFIRM_FRAMES = 4
 const MEDIAPIPE_GPU_FALLBACK_LOG_PATTERNS = [
@@ -19,6 +19,11 @@ const FACE_DETECTOR_MODEL_ASSET_PATHS = {
   short: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
   full: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_full_range/float16/1/blaze_face_full_range.tflite',
 } as const
+const FACE_DETECTION_STAGES = [
+  { model: 'short', zoom: 0.84 },
+  { model: 'short', zoom: 0.68 },
+  { model: 'full', zoom: 0.68 },
+] as const
 
 function shouldMuteMediapipeLog(args: unknown[]) {
   return args.some(
@@ -172,6 +177,16 @@ export default function AnalyzePage() {
             frameRate: { ideal: 30 },
           }
         })
+        const videoTrack = stream.getVideoTracks()[0]
+        if (videoTrack) {
+          const settings = videoTrack.getSettings()
+          console.info('Analyze camera settings:', {
+            width: settings.width,
+            height: settings.height,
+            frameRate: settings.frameRate,
+            facingMode: settings.facingMode,
+          })
+        }
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           videoRef.current.play()
@@ -202,16 +217,19 @@ export default function AnalyzePage() {
 
     type Delegate = 'GPU' | 'CPU'
     type DetectorModel = keyof typeof FACE_DETECTOR_MODEL_ASSET_PATHS
+    type DetectionSource = HTMLVideoElement | HTMLCanvasElement
 
-    let faceDetector: { detectForVideo: (video: HTMLVideoElement, timestamp: number) => DetectionResult, close: () => void } | null = null
+    let faceDetector: { detectForVideo: (source: DetectionSource, timestamp: number) => DetectionResult, close: () => void } | null = null
     let activeDelegate: Delegate | null = null
-    let activeModel: DetectorModel = 'short'
+    let activeStageIndex = 0
     let animationFrameId: number | null = null
     let isCancelled = false
     let isRecovering = false
     let missedDetectionFrames = 0
     let positiveDetectionFrames = 0
     let negativeDetectionFrames = 0
+    const detectionCanvas = document.createElement('canvas')
+    const detectionContext = detectionCanvas.getContext('2d')
 
     const closeFaceDetector = async () => {
       if (!faceDetector) return
@@ -233,6 +251,7 @@ export default function AnalyzePage() {
       )
 
       const createFaceDetector = async (delegate: Delegate) => {
+        const activeModel: DetectorModel = FACE_DETECTION_STAGES[activeStageIndex].model
         return withMutedMediapipeLogs(() =>
           FaceDetector.createFromOptions(vision, {
             baseOptions: {
@@ -278,6 +297,7 @@ export default function AnalyzePage() {
         const created = await createFaceDetectorWithFallback(preferredDelegate)
         faceDetector = created.detector
         activeDelegate = created.delegate
+        const activeModel = FACE_DETECTION_STAGES[activeStageIndex].model
         console.info(`FaceDetector initialized with ${activeDelegate} delegate using ${activeModel} range model`)
 
         if (isCancelled || !faceDetector) {
@@ -288,14 +308,18 @@ export default function AnalyzePage() {
         return true
       }
 
-      const switchToFullRangeModel = async () => {
-        if (isCancelled || activeModel === 'full' || isRecovering) return
-
-        activeModel = 'full'
+      const resetDetectionCounters = () => {
         missedDetectionFrames = 0
         positiveDetectionFrames = 0
         negativeDetectionFrames = 0
-        setNeedsCloserGuidance(true)
+      }
+
+      const advanceDetectionStage = async () => {
+        if (isCancelled || isRecovering || activeStageIndex >= FACE_DETECTION_STAGES.length - 1) return
+
+        activeStageIndex += 1
+        resetDetectionCounters()
+        setNeedsCloserGuidance(activeStageIndex > 0)
 
         try {
           const initialized = await initializeDetector(activeDelegate ?? 'GPU')
@@ -303,7 +327,7 @@ export default function AnalyzePage() {
             scheduleDetect()
           }
         } catch (error) {
-          console.error('FaceDetector full-range fallback failed:', error)
+          console.error('FaceDetector stage transition failed:', error)
         }
       }
 
@@ -326,6 +350,35 @@ export default function AnalyzePage() {
         }
       }
 
+      const getDetectionSource = (video: HTMLVideoElement) => {
+        if (!detectionContext || !video.videoWidth || !video.videoHeight) {
+          return video
+        }
+
+        const zoom = FACE_DETECTION_STAGES[activeStageIndex].zoom
+        const sourceWidth = video.videoWidth * zoom
+        const sourceHeight = video.videoHeight * zoom
+        const sourceX = (video.videoWidth - sourceWidth) / 2
+        const sourceY = (video.videoHeight - sourceHeight) / 2
+
+        detectionCanvas.width = video.videoWidth
+        detectionCanvas.height = video.videoHeight
+        detectionContext.clearRect(0, 0, detectionCanvas.width, detectionCanvas.height)
+        detectionContext.drawImage(
+          video,
+          sourceX,
+          sourceY,
+          sourceWidth,
+          sourceHeight,
+          0,
+          0,
+          detectionCanvas.width,
+          detectionCanvas.height,
+        )
+
+        return detectionCanvas
+      }
+
       const detect = async () => {
         if (isCancelled) return
 
@@ -340,7 +393,8 @@ export default function AnalyzePage() {
         }
 
         try {
-          const results = detector.detectForVideo(video, performance.now())
+          const detectionSource = getDetectionSource(video)
+          const results = detector.detectForVideo(detectionSource, performance.now())
           const highestConfidence = results.detections.reduce((maxConfidence, detection) => {
             const score = detection.categories?.[0]?.score ?? 0
             return Math.max(maxConfidence, score)
@@ -363,8 +417,8 @@ export default function AnalyzePage() {
             positiveDetectionFrames = 0
             negativeDetectionFrames += 1
 
-            if (activeModel === 'short' && missedDetectionFrames >= FACE_DETECTION_FULL_RANGE_FALLBACK_FRAMES) {
-              await switchToFullRangeModel()
+            if (missedDetectionFrames >= FACE_DETECTION_STAGE_TRANSITION_FRAMES) {
+              await advanceDetectionStage()
               return
             }
 
