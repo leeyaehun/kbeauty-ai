@@ -12,6 +12,26 @@ const MAX_VECTOR_CANDIDATES = 2500
 const DEFAULT_REGION: ShoppingRegion = 'korea'
 const DEFAULT_CATEGORIES = ['Cleanser', 'Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Sun Care']
 const POPULAR_PICK_CATEGORIES = new Set(['Hair', 'Body'])
+const TOP_BRAND_TIER_1 = new Set([
+  'COSRX',
+  'ANUA',
+  'ROUND LAB',
+  'BEAUTY OF JOSEON',
+  'TORRIDEN',
+  'DR.G',
+])
+const TOP_BRAND_TIER_2 = new Set([
+  'ABIB',
+  'LANEIGE',
+  'MEDIHEAL',
+  'AESTURA',
+  'ISNTREE',
+  'ILLIYOON',
+  'NUMBUZIN',
+  'SKIN1004',
+  'MIXSOON',
+  'DALBA',
+])
 const BASE_CATEGORY_ALIASES: Record<string, string[]> = {
   Toner: ['Toner', '토너', 'toner'],
   Serum: ['Serum', '세럼', 'serum'],
@@ -37,9 +57,18 @@ type RecommendedProduct = {
   affiliate_url?: string | null
   global_affiliate_url?: string | null
   similarity?: number | null
+  recommendation_source?: 'vector' | 'fallback' | 'popular'
 }
 
 type ProductRegion = ShoppingRegion
+
+type SkinProfile = {
+  combination: number
+  dry: number
+  normal: number
+  oily: number
+  sensitive: number
+} | null
 
 type CandidateProductRow = {
   id: string
@@ -353,6 +382,163 @@ function normalizeMatchScore(similarity: unknown) {
   return Number((MIN_MATCH_SCORE + weighted * 0.39).toFixed(4))
 }
 
+function normalizeSkinProfile(value: unknown): SkinProfile {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const source = value as Record<string, unknown>
+  const parseScore = (key: keyof NonNullable<SkinProfile>) => {
+    const parsed = Number(source[key])
+
+    if (Number.isNaN(parsed)) {
+      return 3
+    }
+
+    return Math.max(0, Math.min(5, parsed))
+  }
+
+  return {
+    combination: parseScore('combination'),
+    dry: parseScore('dry'),
+    normal: parseScore('normal'),
+    oily: parseScore('oily'),
+    sensitive: parseScore('sensitive'),
+  }
+}
+
+function clampUnit(value: number) {
+  return Math.max(0, Math.min(1, value))
+}
+
+function normalizeProfileScore(value: number) {
+  return clampUnit(value / 5)
+}
+
+function getProductProfileScore(profile: SkinProfile, key: keyof NonNullable<SkinProfile>) {
+  if (!profile) {
+    return 0.55
+  }
+
+  return normalizeProfileScore(profile[key])
+}
+
+function calculateSkinTypeFit(analysisResult: any, skinProfile: SkinProfile) {
+  const skinType = typeof analysisResult?.skin_type === 'string' ? analysisResult.skin_type : 'normal'
+
+  if (!skinProfile) {
+    return 0.58
+  }
+
+  return getProductProfileScore(skinProfile, skinType in skinProfile ? skinType as keyof NonNullable<SkinProfile> : 'normal')
+}
+
+function calculateConcernFit(analysisResult: any, skinProfile: SkinProfile) {
+  const concerns = Array.isArray(analysisResult?.concerns)
+    ? analysisResult.concerns.filter((value: unknown): value is string => typeof value === 'string')
+    : []
+
+  if (concerns.length === 0) {
+    return 0.62
+  }
+
+  const concernTargets: Record<string, Array<keyof NonNullable<SkinProfile>>> = {
+    acne: ['oily', 'sensitive'],
+    hyperpigmentation: ['sensitive', 'normal'],
+    wrinkles: ['dry', 'normal'],
+    pores: ['oily', 'combination'],
+    redness: ['sensitive', 'dry'],
+    dryness: ['dry', 'sensitive'],
+  }
+
+  const scores = concerns.map((concern: string) => {
+    const targets = concernTargets[concern]
+
+    if (!targets || targets.length === 0) {
+      return 0.58
+    }
+
+    const targetScores = targets.map((target) => getProductProfileScore(skinProfile, target))
+    return targetScores.reduce((sum, score) => sum + score, 0) / targetScores.length
+  })
+
+  return clampUnit(scores.reduce((sum: number, score: number) => sum + score, 0) / scores.length)
+}
+
+function calculateScoreProfileFit(analysisResult: any, skinProfile: SkinProfile) {
+  const hydration = clampUnit(Number(analysisResult?.scores?.hydration ?? 50) / 100)
+  const oiliness = clampUnit(Number(analysisResult?.scores?.oiliness ?? 50) / 100)
+  const sensitivity = clampUnit(Number(analysisResult?.scores?.sensitivity ?? 50) / 100)
+
+  const dryNeed = 1 - hydration
+  const oilyNeed = oiliness
+  const sensitiveNeed = sensitivity
+  const combinationNeed = clampUnit(1 - Math.abs(dryNeed - oilyNeed))
+  const normalNeed = clampUnit(1 - ((Math.abs(dryNeed - 0.45) + Math.abs(oilyNeed - 0.45) + Math.abs(sensitiveNeed - 0.35)) / 3))
+
+  const desiredProfile = {
+    combination: combinationNeed,
+    dry: dryNeed,
+    normal: normalNeed,
+    oily: oilyNeed,
+    sensitive: sensitiveNeed,
+  }
+
+  const totalGap = Object.entries(desiredProfile).reduce((sum, [key, desired]) => {
+    const actual = getProductProfileScore(skinProfile, key as keyof NonNullable<SkinProfile>)
+    return sum + Math.abs(desired - actual)
+  }, 0)
+
+  return clampUnit(1 - totalGap / 5)
+}
+
+function getBrandRecognitionBoost(brand: string | null | undefined) {
+  const normalizedBrand = brand?.trim().toUpperCase() ?? ''
+
+  if (!normalizedBrand) {
+    return 0
+  }
+
+  if (TOP_BRAND_TIER_1.has(normalizedBrand)) {
+    return 0.04
+  }
+
+  if (TOP_BRAND_TIER_2.has(normalizedBrand)) {
+    return 0.02
+  }
+
+  return 0
+}
+
+function calculateBaseRecommendationFit(analysisResult: any, product: RecommendedProduct) {
+  const skinProfile = normalizeSkinProfile(product.skin_profile)
+  const rawVectorSimilarity = clampUnit(Number(product.similarity ?? 0))
+  const skinTypeFit = calculateSkinTypeFit(analysisResult, skinProfile)
+  const concernFit = calculateConcernFit(analysisResult, skinProfile)
+  const scoreProfileFit = calculateScoreProfileFit(analysisResult, skinProfile)
+
+  return clampUnit(
+    skinTypeFit * 0.5 +
+    concernFit * 0.25 +
+    scoreProfileFit * 0.15 +
+    rawVectorSimilarity * 0.1
+  )
+}
+
+function normalizeDisplayFitScore(product: RecommendedProduct, baseFit: number) {
+  const brandBoost = getBrandRecognitionBoost(product.brand)
+
+  if (product.recommendation_source === 'popular') {
+    return Number(clampUnit(Math.min(0.72, 0.66 + baseFit * 0.04 + brandBoost * 0.35)).toFixed(4))
+  }
+
+  if (product.recommendation_source === 'fallback') {
+    return Number(clampUnit(Math.min(0.76, 0.64 + baseFit * 0.1 + brandBoost * 0.5)).toFixed(4))
+  }
+
+  return Number(clampUnit(Math.min(0.88, 0.62 + baseFit * 0.22 + brandBoost)).toFixed(4))
+}
+
 async function matchProductsByRpc(
   supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
   queryEmbedding: number[],
@@ -396,6 +582,7 @@ async function matchProductsByRpc(
         affiliate_url: product.affiliate_url,
         global_affiliate_url: product.global_affiliate_url,
         similarity: product.similarity,
+        recommendation_source: 'vector',
       }
       const existingProduct = dedupedProducts.get(nextProduct.id)
 
@@ -445,10 +632,15 @@ export async function POST(req: NextRequest) {
         .map((product) => ({
           ...product,
           similarity: MIN_MATCH_SCORE,
+          recommendation_source: 'popular' as const,
         }))
 
       const mergedPopularProducts = popularProducts.map((product) => {
         const pricePresentation = getProductPricePresentation(product.price, product.category)
+        const fitScore = normalizeDisplayFitScore(
+          product,
+          calculateBaseRecommendationFit(analysisResult, product)
+        )
 
         return {
           ...product,
@@ -457,9 +649,9 @@ export async function POST(req: NextRequest) {
           display_price: pricePresentation.displayPrice,
           global_affiliate_url: product.global_affiliate_url ?? null,
           price_minor_unit: pricePresentation.priceMinorUnit,
-          similarity: normalizeMatchScore(product.similarity),
+          similarity: fitScore,
         }
-      })
+      }).sort((left, right) => (right.similarity ?? 0) - (left.similarity ?? 0))
 
       return NextResponse.json({ products: mergedPopularProducts })
     }
@@ -493,6 +685,7 @@ export async function POST(req: NextRequest) {
         .map((product) => ({
           ...product,
           similarity: MIN_MATCH_SCORE,
+          recommendation_source: 'fallback' as const,
         }))
     }
 
@@ -565,6 +758,7 @@ export async function POST(req: NextRequest) {
               affiliate_url: product.affiliate_url,
               global_affiliate_url: product.global_affiliate_url,
               similarity: cosineSimilarity(userEmbedding, embedding),
+              recommendation_source: 'vector' as const,
             }
           })
         const rankedProducts: RecommendedProduct[] = scoredProducts
@@ -581,6 +775,10 @@ export async function POST(req: NextRequest) {
 
     const mergedProducts = recommendedProducts.map((product) => {
       const pricePresentation = getProductPricePresentation(product.price, product.category)
+      const fitScore = normalizeDisplayFitScore(
+        product,
+        calculateBaseRecommendationFit(analysisResult, product)
+      )
 
       return {
         ...product,
@@ -589,9 +787,9 @@ export async function POST(req: NextRequest) {
         display_price: pricePresentation.displayPrice,
         global_affiliate_url: product.global_affiliate_url ?? null,
         price_minor_unit: pricePresentation.priceMinorUnit,
-        similarity: normalizeMatchScore(product.similarity),
+        similarity: fitScore,
       }
-    })
+    }).sort((left, right) => (right.similarity ?? 0) - (left.similarity ?? 0))
 
     return NextResponse.json({ products: mergedProducts })
   } catch (error: any) {
