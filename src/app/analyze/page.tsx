@@ -7,11 +7,18 @@ const MEDIAPIPE_CPU_INFO_LOG = 'INFO: Created TensorFlow Lite XNNPACK delegate f
 const MAX_CAPTURE_BYTES = 1024 * 1024
 const MIN_FACE_DETECTION_CONFIDENCE = 0.3
 const FACE_DETECTION_FALLBACK_DELAY_MS = 5000
+const FACE_DETECTION_FULL_RANGE_FALLBACK_FRAMES = 36
+const FACE_DETECTION_POSITIVE_CONFIRM_FRAMES = 2
+const FACE_DETECTION_NEGATIVE_CONFIRM_FRAMES = 4
 const MEDIAPIPE_GPU_FALLBACK_LOG_PATTERNS = [
   'StartGraph failed: INTERNAL: Service "kGpuService"',
   'emscripten_webgl_create_context() returned error 0',
   'gl_graph_runner_internal.cc',
 ]
+const FACE_DETECTOR_MODEL_ASSET_PATHS = {
+  short: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+  full: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_full_range/float16/1/blaze_face_full_range.tflite',
+} as const
 
 function shouldMuteMediapipeLog(args: unknown[]) {
   return args.some(
@@ -136,6 +143,7 @@ export default function AnalyzePage() {
   const [captureError, setCaptureError] = useState('')
   const [isCapturing, setIsCapturing] = useState(false)
   const [showCaptureAnyway, setShowCaptureAnyway] = useState(false)
+  const [needsCloserGuidance, setNeedsCloserGuidance] = useState(false)
   const router = useRouter()
 
   const stopCameraStream = useCallback(() => {
@@ -193,12 +201,17 @@ export default function AnalyzePage() {
     }
 
     type Delegate = 'GPU' | 'CPU'
+    type DetectorModel = keyof typeof FACE_DETECTOR_MODEL_ASSET_PATHS
 
     let faceDetector: { detectForVideo: (video: HTMLVideoElement, timestamp: number) => DetectionResult, close: () => void } | null = null
     let activeDelegate: Delegate | null = null
+    let activeModel: DetectorModel = 'short'
     let animationFrameId: number | null = null
     let isCancelled = false
     let isRecovering = false
+    let missedDetectionFrames = 0
+    let positiveDetectionFrames = 0
+    let negativeDetectionFrames = 0
 
     const closeFaceDetector = async () => {
       if (!faceDetector) return
@@ -220,10 +233,10 @@ export default function AnalyzePage() {
       )
 
       const createFaceDetector = async (delegate: Delegate) => {
-      return withMutedMediapipeLogs(() =>
+        return withMutedMediapipeLogs(() =>
           FaceDetector.createFromOptions(vision, {
             baseOptions: {
-              modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+              modelAssetPath: FACE_DETECTOR_MODEL_ASSET_PATHS[activeModel],
               delegate
             },
             runningMode: 'VIDEO',
@@ -265,7 +278,7 @@ export default function AnalyzePage() {
         const created = await createFaceDetectorWithFallback(preferredDelegate)
         faceDetector = created.detector
         activeDelegate = created.delegate
-        console.info(`FaceDetector initialized with ${activeDelegate} delegate`)
+        console.info(`FaceDetector initialized with ${activeDelegate} delegate using ${activeModel} range model`)
 
         if (isCancelled || !faceDetector) {
           await closeFaceDetector()
@@ -273,6 +286,25 @@ export default function AnalyzePage() {
         }
 
         return true
+      }
+
+      const switchToFullRangeModel = async () => {
+        if (isCancelled || activeModel === 'full' || isRecovering) return
+
+        activeModel = 'full'
+        missedDetectionFrames = 0
+        positiveDetectionFrames = 0
+        negativeDetectionFrames = 0
+        setNeedsCloserGuidance(true)
+
+        try {
+          const initialized = await initializeDetector(activeDelegate ?? 'GPU')
+          if (initialized && !isCancelled) {
+            scheduleDetect()
+          }
+        } catch (error) {
+          console.error('FaceDetector full-range fallback failed:', error)
+        }
       }
 
       const recoverDetector = async (error: unknown) => {
@@ -308,16 +340,39 @@ export default function AnalyzePage() {
         }
 
         try {
-          const results = detector.detectForVideo(video, Date.now())
+          const results = detector.detectForVideo(video, performance.now())
           const highestConfidence = results.detections.reduce((maxConfidence, detection) => {
             const score = detection.categories?.[0]?.score ?? 0
             return Math.max(maxConfidence, score)
           }, 0)
           console.debug('Face detection confidence:', highestConfidence)
-          const detected = highestConfidence >= MIN_FACE_DETECTION_CONFIDENCE
-          setFaceDetected(detected)
-          if (detected) setStatus('detected')
-          else setStatus('ready')
+          const detectedThisFrame = highestConfidence >= MIN_FACE_DETECTION_CONFIDENCE
+
+          if (detectedThisFrame) {
+            missedDetectionFrames = 0
+            positiveDetectionFrames += 1
+            negativeDetectionFrames = 0
+            setNeedsCloserGuidance(false)
+
+            if (positiveDetectionFrames >= FACE_DETECTION_POSITIVE_CONFIRM_FRAMES) {
+              setFaceDetected(true)
+              setStatus('detected')
+            }
+          } else {
+            missedDetectionFrames += 1
+            positiveDetectionFrames = 0
+            negativeDetectionFrames += 1
+
+            if (activeModel === 'short' && missedDetectionFrames >= FACE_DETECTION_FULL_RANGE_FALLBACK_FRAMES) {
+              await switchToFullRangeModel()
+              return
+            }
+
+            if (negativeDetectionFrames >= FACE_DETECTION_NEGATIVE_CONFIRM_FRAMES) {
+              setFaceDetected(false)
+              setStatus('ready')
+            }
+          }
         } catch (error) {
           setFaceDetected(false)
           setStatus('ready')
@@ -344,6 +399,12 @@ export default function AnalyzePage() {
         cancelAnimationFrame(animationFrameId)
       }
       void closeFaceDetector()
+    }
+  }, [cameraReady])
+
+  useEffect(() => {
+    if (!cameraReady) {
+      setNeedsCloserGuidance(false)
     }
   }, [cameraReady])
 
@@ -480,6 +541,9 @@ export default function AnalyzePage() {
                   <p className="text-lg font-semibold text-[var(--ink)]">Center your face inside the frame.</p>
                   <p className="text-sm text-[var(--muted)]">Make sure your face is well-lit and centered.</p>
                   <p className="text-sm text-[var(--muted)]">밝은 곳에서 정면을 바라봐주세요.</p>
+                  {needsCloserGuidance ? (
+                    <p className="text-sm text-[var(--muted)]">If you&apos;re on a laptop camera, move a little closer and keep your face steady.</p>
+                  ) : null}
                 </div>
               )}
               {status === 'detected' && (
@@ -504,7 +568,11 @@ export default function AnalyzePage() {
             </button>
 
             <p className="mt-4 text-center text-sm text-[var(--muted)]">
-              {faceDetected ? 'You are all set for your skin survey.' : 'Make sure your face is well-lit and centered. 밝은 곳에서 정면을 바라봐주세요.'}
+              {faceDetected
+                ? 'You are all set for your skin survey.'
+                : needsCloserGuidance
+                  ? 'Make sure your face is well-lit, centered, and a little closer to your camera.'
+                  : 'Make sure your face is well-lit and centered. 밝은 곳에서 정면을 바라봐주세요.'}
             </p>
             {showCaptureAnyway && !faceDetected ? (
               <button
