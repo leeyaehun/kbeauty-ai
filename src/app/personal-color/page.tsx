@@ -255,6 +255,7 @@ export default function PersonalColorPage() {
   const [paramsReady, setParamsReady] = useState(false)
   const [result, setResult] = useState<PersonalColorResult | null>(null)
   const [selectedColor, setSelectedColor] = useState<PersonalColorSwatch | null>(null)
+  const [selectedAvoidColor, setSelectedAvoidColor] = useState<PersonalColorSwatch | null>(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [showLiveCamera, setShowLiveCamera] = useState(false)
   const [wheelAnimationVersion, setWheelAnimationVersion] = useState(0)
@@ -408,6 +409,7 @@ export default function PersonalColorPage() {
     setCapturedImage('')
     setResult(null)
     setSelectedColor(null)
+    setSelectedAvoidColor(null)
     setShowLiveCamera(false)
     setError('')
     setCameraPreviewState('idle')
@@ -769,7 +771,10 @@ export default function PersonalColorPage() {
                 backgroundHex={canvasBackground}
                 colors={canvasColors}
                 onClose={() => setShowLiveCamera(false)}
-                onColorSelect={setSelectedColor}
+                onColorSelect={(color) => {
+                  setSelectedColor(color)
+                  setSelectedAvoidColor(null)
+                }}
                 selectedColor={selectedColor}
               />
             ) : (
@@ -780,7 +785,10 @@ export default function PersonalColorPage() {
                 backgroundHex={canvasBackground}
                 colors={canvasColors}
                 imageData={capturedImage}
-                onColorSelect={setSelectedColor}
+                onColorSelect={(color) => {
+                  setSelectedColor(color)
+                  setSelectedAvoidColor(null)
+                }}
                 selectedHex={selectedColor?.hex ?? null}
                 season={result.season}
               />
@@ -812,6 +820,7 @@ export default function PersonalColorPage() {
               <button
                 onClick={() => {
                   setSelectedColor(null)
+                  setSelectedAvoidColor(null)
                   setWheelAnimationVersion((value) => value + 1)
                 }}
                 className="rounded-full bg-[#FF6B9D] px-5 py-4 text-sm font-semibold text-white transition hover:translate-y-[-1px] hover:bg-[#e8588a]"
@@ -851,9 +860,9 @@ export default function PersonalColorPage() {
               <button
                 key={`${color.name}-${color.hex}`}
                 type="button"
-                onClick={() => setSelectedColor(color)}
+                onClick={() => setSelectedAvoidColor(color)}
                 className={`h-11 w-11 rounded-full border shadow-[0_12px_22px_rgba(100,116,139,0.14)] transition ${
-                  selectedColor?.hex === color.hex
+                  selectedAvoidColor?.hex === color.hex
                     ? 'border-[#FF6B9D] shadow-[0_0_0_4px_rgba(255,107,157,0.18)]'
                     : 'border-white/70'
                 }`}
@@ -864,6 +873,28 @@ export default function PersonalColorPage() {
                 aria-label={`Select avoid color ${color.name} ${color.hex}`}
               />
             ))}
+          </div>
+
+          <div
+            className="mt-4 rounded-[24px] border border-white/70 p-4 shadow-[0_18px_34px_rgba(60,43,57,0.08)] transition-all duration-300"
+            style={{
+              backgroundColor: selectedAvoidColor ? withHexOpacity(selectedAvoidColor.hex, '18') : 'rgba(255,255,255,0.82)',
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <span
+                className="h-5 w-5 shrink-0 rounded-full border border-white/80 shadow-[0_8px_16px_rgba(60,43,57,0.08)]"
+                style={{ backgroundColor: selectedAvoidColor?.hex ?? '#D1D5DB' }}
+              />
+              <div className="min-w-0">
+                <p className={`text-sm font-semibold ${selectedAvoidColor ? 'text-[#2d1b2f]' : 'text-[#7c6a78]'}`}>
+                  {selectedAvoidColor?.name ?? 'Tap an avoid color to explore'}
+                </p>
+                {selectedAvoidColor ? (
+                  <p className="mt-1 text-xs text-[#6b7280]">{selectedAvoidColor.hex}</p>
+                ) : null}
+              </div>
+            </div>
           </div>
         </section>
 
