@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { getSkinTypeExplanation } from '@/lib/skin-type-copy'
 
 const ANALYZE_TIMEOUT_MS = 30_000
 const ANALYZE_MAX_RETRIES = 1
@@ -243,7 +244,7 @@ export default function ResultsPage() {
                 {SKIN_TYPE_KO[result.skin_type] || result.skin_type}
               </h1>
               <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
-                A soft synthesis of image analysis and your survey answers, designed to reflect how your skin behaves in real life.
+                {getSkinTypeExplanation(result.skin_type)}
               </p>
 
             </div>
@@ -267,14 +268,9 @@ export default function ResultsPage() {
 
           <section className="space-y-6">
             <div className="brand-card p-7 md:p-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Glow metrics</p>
-                  <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Your skin scoreboard</h2>
-                </div>
-                <div className="rounded-full bg-[#fff0f5] px-4 py-2 text-sm font-semibold text-[#c89b3c]">
-                  AI completed
-                </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">Glow metrics</p>
+                <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">Your skin scoreboard</h2>
               </div>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">

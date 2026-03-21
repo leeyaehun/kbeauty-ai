@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase'
+import { getSkinTypeExplanation } from '@/lib/skin-type-copy'
 
 type ScoreSet = {
   hydration: number
@@ -232,7 +233,7 @@ export default function ResultsSavedPage() {
                 {SKIN_TYPE_LABEL[analysisResult.skin_type] || analysisResult.skin_type}
               </h1>
               <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
-                Your latest saved result is ready. Open recommendations to browse the full category selection again.
+                {getSkinTypeExplanation(analysisResult.skin_type)}
               </p>
             </div>
 
