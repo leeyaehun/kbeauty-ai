@@ -38,6 +38,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 const POPULAR_PICK_TEXT = 'Popular K-Beauty pick'
+const RECOMMEND_CACHE_PREFIX = 'recommendationCache:'
 
 type Product = {
   id: string
@@ -72,6 +73,10 @@ function getDisplayMatchScore(similarity: number | null | undefined) {
 
 function getDisplayPrice(product: Product) {
   return product.display_price ?? getProductPricePresentation(product.price, product.category).displayPrice
+}
+
+function getRecommendationCacheKey(analysisResult: unknown, category: string | null, region: Region) {
+  return `${RECOMMEND_CACHE_PREFIX}${JSON.stringify({ analysisResult, category, region })}`
 }
 
 function withRegionAwareDisplay(product: Product, region: Region, buttonLabel?: string) {
@@ -309,6 +314,18 @@ export default function RecommendPage() {
       }
 
       try {
+        const cacheKey = getRecommendationCacheKey(analysisResult, selectedCategory, region)
+        const cachedValue = sessionStorage.getItem(cacheKey)
+
+        if (cachedValue) {
+          const cachedProducts = JSON.parse(cachedValue) as Product[]
+
+          if (isActive) {
+            setProducts(cachedProducts)
+          }
+          return
+        }
+
         const res = await fetch('/api/recommend', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -337,29 +354,15 @@ export default function RecommendPage() {
 
             return rightPriority - leftPriority
           })
+          .map((product) => ({
+            ...product,
+            explanation: product.explanation || (isPopularPickCategory(product.category) ? POPULAR_PICK_TEXT : ''),
+          }))
 
-        const productsWithExplanation = await Promise.all(
-          regionAwareProducts.map(async product => {
-            if (isPopularPickCategory(product.category)) {
-              return { ...product, explanation: POPULAR_PICK_TEXT }
-            }
-
-            try {
-              const explainRes = await fetch('/api/explain', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ product, analysisResult })
-              })
-              const explainData = await explainRes.json()
-              return { ...product, explanation: explainData.explanation || '' }
-            } catch {
-              return product
-            }
-          })
-        )
+        sessionStorage.setItem(cacheKey, JSON.stringify(regionAwareProducts))
 
         if (isActive) {
-          setProducts(productsWithExplanation)
+          setProducts(regionAwareProducts)
         }
       } catch {
         if (isActive) {

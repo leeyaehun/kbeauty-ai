@@ -45,7 +45,7 @@ type PersonalColorResult = {
     eyeshadow: string
   }
   celebrity_examples: string[]
-  product_recommendations: Record<'foundation' | 'lip' | 'blush' | 'eyeshadow', MakeupProductSection>
+  product_recommendations?: Record<'foundation' | 'lip' | 'blush' | 'eyeshadow', MakeupProductSection>
 }
 
 const SEASON_META: Record<
@@ -53,32 +53,32 @@ const SEASON_META: Record<
   {
     background: string
     badgeClassName: string
-    subtitle: string
+    description: string
     title: string
   }
 > = {
   autumn_warm: {
     background: '#FFF5E6',
     badgeClassName: 'bg-[#FFE8C2] text-[#8B6914]',
-    subtitle: 'Earth-led and golden shades create depth when your coloring prefers warmth over contrast.',
+    description: 'Autumn Warm looks best in rich, earthy, and softly warm shades with natural depth.',
     title: 'AUTUMN WARM',
   },
   spring_warm: {
     background: '#FFF0E6',
     badgeClassName: 'bg-[#FFE4C4] text-[#8B4513]',
-    subtitle: 'Lively peach, coral, and sunlit yellows tend to brighten your complexion immediately.',
+    description: 'Spring Warm shines in bright, fresh, and golden shades that feel light and lively.',
     title: 'SPRING WARM',
   },
   summer_cool: {
     background: '#F0E6FF',
     badgeClassName: 'bg-[#E6E6FA] text-[#483D8B]',
-    subtitle: 'Powdery mauves, cool pinks, and airy blues bring softness without washing you out.',
+    description: 'Summer Cool suits soft, muted, and cool-toned colors that feel calm and elegant.',
     title: 'SUMMER COOL',
   },
   winter_cool: {
     background: '#E6F0FF',
     badgeClassName: 'bg-[#E0F0FF] text-[#1A3A5C]',
-    subtitle: 'High-contrast cool tones, from icy neutrals to sharp brights, amplify your definition.',
+    description: 'Winter Cool stands out in clear, cool, and high-contrast colors with crisp definition.',
     title: 'WINTER COOL',
   },
 }
@@ -116,6 +116,18 @@ function buildCanvasColors(bestColors: PersonalColorSwatch[], season: PersonalCo
 
 function withHexOpacity(hex: string, alphaHex: string) {
   return /^#[0-9A-F]{6}$/i.test(hex) ? `${hex}${alphaHex}` : 'rgba(255,255,255,0.82)'
+}
+
+function safeParse<T>(value: string | null, fallback: T) {
+  if (!value) {
+    return fallback
+  }
+
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
 }
 
 async function dataUrlToFile(dataUrl: string, fileName: string) {
@@ -476,8 +488,19 @@ export default function PersonalColorPage() {
     }
 
     const imageData = sessionStorage.getItem(PERSONAL_COLOR_CAPTURED_IMAGE_KEY)
+    const cachedResult = safeParse<PersonalColorResult | null>(
+      sessionStorage.getItem(PERSONAL_COLOR_RESULT_KEY),
+      null
+    )
 
     if (!imageData) {
+      setLoading(false)
+      return
+    }
+
+    if (cachedResult) {
+      setCapturedImage(imageData)
+      setResult(cachedResult)
       setLoading(false)
       return
     }
@@ -736,10 +759,7 @@ export default function PersonalColorPage() {
               {seasonMeta.title}
             </div>
             <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-[#5f4a61] md:text-base">
-              {seasonMeta.subtitle}
-            </p>
-            <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-[#6b5967]">
-              {result.description}
+              {seasonMeta.description}
             </p>
           </div>
 
@@ -765,6 +785,28 @@ export default function PersonalColorPage() {
                 season={result.season}
               />
             )}
+
+            <div
+              className="mt-4 rounded-[24px] border border-white/70 p-4 shadow-[0_18px_34px_rgba(60,43,57,0.08)] transition-all duration-300"
+              style={{
+                backgroundColor: selectedColor ? withHexOpacity(selectedColor.hex, '26') : 'rgba(255,255,255,0.82)',
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className="h-5 w-5 shrink-0 rounded-full border border-white/80 shadow-[0_8px_16px_rgba(60,43,57,0.08)]"
+                  style={{ backgroundColor: selectedColor?.hex ?? '#D1D5DB' }}
+                />
+                <div className="min-w-0">
+                  <p className={`text-sm font-semibold ${selectedColor ? 'text-[#2d1b2f]' : 'text-[#7c6a78]'}`}>
+                    {selectedColor?.name ?? 'Tap a color to explore'}
+                  </p>
+                  {selectedColor ? (
+                    <p className="mt-1 text-xs text-[#6b7280]">{selectedColor.hex}</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
 
             <div className="mt-5 grid gap-3 md:grid-cols-3">
               <button
@@ -799,28 +841,6 @@ export default function PersonalColorPage() {
                 Retake Photo
               </button>
             </div>
-
-            <div
-              className="mt-4 rounded-[24px] border border-white/70 p-4 shadow-[0_18px_34px_rgba(60,43,57,0.08)] transition-all duration-300"
-              style={{
-                backgroundColor: selectedColor ? withHexOpacity(selectedColor.hex, '26') : 'rgba(255,255,255,0.82)',
-              }}
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className="h-5 w-5 shrink-0 rounded-full border border-white/80 shadow-[0_8px_16px_rgba(60,43,57,0.08)]"
-                  style={{ backgroundColor: selectedColor?.hex ?? '#D1D5DB' }}
-                />
-                <div className="min-w-0">
-                  <p className={`text-sm font-semibold ${selectedColor ? 'text-[#2d1b2f]' : 'text-[#7c6a78]'}`}>
-                    {selectedColor?.name ?? 'Tap a color to explore'}
-                  </p>
-                  {selectedColor ? (
-                    <p className="mt-1 text-xs text-[#6b7280]">{selectedColor.hex}</p>
-                  ) : null}
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 
@@ -828,14 +848,20 @@ export default function PersonalColorPage() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8c6d72]">Colors to Avoid</p>
           <div className="mt-5 flex flex-wrap gap-3">
             {result.avoid_colors.map((color) => (
-              <div
+              <button
                 key={`${color.name}-${color.hex}`}
-                className="h-11 w-11 rounded-full border border-white/70 shadow-[0_12px_22px_rgba(100,116,139,0.14)]"
+                type="button"
+                onClick={() => setSelectedColor(color)}
+                className={`h-11 w-11 rounded-full border shadow-[0_12px_22px_rgba(100,116,139,0.14)] transition ${
+                  selectedColor?.hex === color.hex
+                    ? 'border-[#FF6B9D] shadow-[0_0_0_4px_rgba(255,107,157,0.18)]'
+                    : 'border-white/70'
+                }`}
                 style={{
                   backgroundColor: color.hex,
                   filter: 'grayscale(1)',
                 }}
-                aria-label={`Avoid color ${color.hex}`}
+                aria-label={`Select avoid color ${color.name} ${color.hex}`}
               />
             ))}
           </div>

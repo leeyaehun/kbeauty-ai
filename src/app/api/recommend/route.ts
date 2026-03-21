@@ -12,6 +12,7 @@ const MAX_VECTOR_CANDIDATES = 2500
 const DEFAULT_REGION: ShoppingRegion = 'korea'
 const DEFAULT_CATEGORIES = ['Cleanser', 'Toner', 'Moisturizer', 'Serum', 'Cream', 'Face Mask', 'Sun Care']
 const POPULAR_PICK_CATEGORIES = new Set(['Hair', 'Body'])
+const POPULAR_PICK_TEXT = 'Popular K-Beauty pick'
 const TOP_BRAND_TIER_1 = new Set([
   'COSRX',
   'ANUA',
@@ -57,6 +58,7 @@ type RecommendedProduct = {
   affiliate_url?: string | null
   global_affiliate_url?: string | null
   similarity?: number | null
+  explanation?: string
   recommendation_source?: 'vector' | 'fallback' | 'popular'
 }
 
@@ -539,6 +541,42 @@ function normalizeDisplayFitScore(product: RecommendedProduct, baseFit: number) 
   return Number(clampUnit(Math.min(0.88, 0.62 + baseFit * 0.22 + brandBoost)).toFixed(4))
 }
 
+function buildProductExplanation(product: RecommendedProduct, analysisResult: any) {
+  const concerns = Array.isArray(analysisResult?.concerns)
+    ? analysisResult.concerns.filter((value: unknown): value is string => typeof value === 'string')
+    : []
+  const skinType = typeof analysisResult?.skin_type === 'string' ? analysisResult.skin_type : 'normal'
+
+  if (product.recommendation_source === 'popular' || isPopularPickCategory(product.category ?? null)) {
+    return POPULAR_PICK_TEXT
+  }
+
+  const concernCopy: Record<string, string> = {
+    acne: 'breakout-prone skin',
+    hyperpigmentation: 'tone-evening support',
+    wrinkles: 'barrier and smoothing care',
+    pores: 'oil-balance support',
+    redness: 'calming support',
+    dryness: 'extra moisture support',
+  }
+
+  const leadConcern = concerns[0]
+  const concernPhrase = leadConcern ? concernCopy[leadConcern] ?? 'daily skin balance' : 'daily skin balance'
+
+  switch (skinType) {
+    case 'dry':
+      return `Good for dry skin with moisture support and a focus on ${concernPhrase}.`
+    case 'oily':
+      return `Good for oily skin with lightweight balance and support for ${concernPhrase}.`
+    case 'combination':
+      return `Good for combination skin with balanced hydration and support for ${concernPhrase}.`
+    case 'sensitive':
+      return `Good for sensitive skin with gentle care and support for ${concernPhrase}.`
+    default:
+      return `Good for balanced skin with everyday support for ${concernPhrase}.`
+  }
+}
+
 async function matchProductsByRpc(
   supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
   queryEmbedding: number[],
@@ -647,6 +685,7 @@ export async function POST(req: NextRequest) {
           affiliate_url: product.affiliate_url ?? null,
           currency_code: pricePresentation.currencyCode,
           display_price: pricePresentation.displayPrice,
+          explanation: buildProductExplanation(product, analysisResult),
           global_affiliate_url: product.global_affiliate_url ?? null,
           price_minor_unit: pricePresentation.priceMinorUnit,
           similarity: fitScore,
@@ -785,6 +824,7 @@ export async function POST(req: NextRequest) {
         affiliate_url: product.affiliate_url ?? null,
         currency_code: pricePresentation.currencyCode,
         display_price: pricePresentation.displayPrice,
+        explanation: buildProductExplanation(product, analysisResult),
         global_affiliate_url: product.global_affiliate_url ?? null,
         price_minor_unit: pricePresentation.priceMinorUnit,
         similarity: fitScore,
