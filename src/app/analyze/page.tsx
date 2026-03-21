@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 
 const MEDIAPIPE_CPU_INFO_LOG = 'INFO: Created TensorFlow Lite XNNPACK delegate for CPU.'
 const MAX_CAPTURE_BYTES = 1024 * 1024
-const MIN_FACE_DETECTION_CONFIDENCE = 0.6
+const MIN_FACE_DETECTION_CONFIDENCE = 0.3
+const FACE_DETECTION_FALLBACK_DELAY_MS = 5000
 const MEDIAPIPE_GPU_FALLBACK_LOG_PATTERNS = [
   'StartGraph failed: INTERNAL: Service "kGpuService"',
   'emscripten_webgl_create_context() returned error 0',
@@ -128,18 +129,25 @@ async function compressCanvasForUpload(sourceCanvas: HTMLCanvasElement) {
 export default function AnalyzePage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const fallbackTimeoutRef = useRef<number | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'detected' | 'captured'>('loading')
   const [cameraReady, setCameraReady] = useState(false)
   const [faceDetected, setFaceDetected] = useState(false)
   const [captureError, setCaptureError] = useState('')
   const [isCapturing, setIsCapturing] = useState(false)
+  const [showCaptureAnyway, setShowCaptureAnyway] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: 640, height: 480 }
+          video: {
+            facingMode: 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 },
+          }
         })
         if (videoRef.current) {
           videoRef.current.srcObject = stream
@@ -200,7 +208,7 @@ export default function AnalyzePage() {
       )
 
       const createFaceDetector = async (delegate: Delegate) => {
-        return withMutedMediapipeLogs(() =>
+      return withMutedMediapipeLogs(() =>
           FaceDetector.createFromOptions(vision, {
             baseOptions: {
               modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
@@ -208,6 +216,7 @@ export default function AnalyzePage() {
             },
             runningMode: 'VIDEO',
             minDetectionConfidence: MIN_FACE_DETECTION_CONFIDENCE,
+            minSuppressionThreshold: 0.3,
           })
         )
       }
@@ -326,8 +335,39 @@ export default function AnalyzePage() {
     }
   }, [cameraReady])
 
-  const capture = useCallback(async () => {
-    if (!faceDetected || isCapturing) return
+  useEffect(() => {
+    if (!cameraReady) {
+      return
+    }
+
+    if (faceDetected) {
+      setShowCaptureAnyway(false)
+      if (fallbackTimeoutRef.current !== null) {
+        window.clearTimeout(fallbackTimeoutRef.current)
+        fallbackTimeoutRef.current = null
+      }
+      return
+    }
+
+    if (fallbackTimeoutRef.current !== null) {
+      return
+    }
+
+    fallbackTimeoutRef.current = window.setTimeout(() => {
+      setShowCaptureAnyway(true)
+      fallbackTimeoutRef.current = null
+    }, FACE_DETECTION_FALLBACK_DELAY_MS)
+
+    return () => {
+      if (fallbackTimeoutRef.current !== null) {
+        window.clearTimeout(fallbackTimeoutRef.current)
+        fallbackTimeoutRef.current = null
+      }
+    }
+  }, [cameraReady, faceDetected])
+
+  const capture = useCallback(async (forceCapture = false) => {
+    if ((!faceDetected && !forceCapture) || isCapturing) return
     if (!videoRef.current || !canvasRef.current) return
 
     try {
@@ -425,7 +465,8 @@ export default function AnalyzePage() {
               {status === 'ready' && (
                 <div className="mt-3 space-y-2">
                   <p className="text-lg font-semibold text-[var(--ink)]">Center your face inside the frame.</p>
-                  <p className="text-sm text-[var(--muted)]">Face forward in bright light for the most accurate read.</p>
+                  <p className="text-sm text-[var(--muted)]">Make sure your face is well-lit and centered.</p>
+                  <p className="text-sm text-[var(--muted)]">밝은 곳에서 정면을 바라봐주세요.</p>
                 </div>
               )}
               {status === 'detected' && (
@@ -437,11 +478,11 @@ export default function AnalyzePage() {
             </div>
 
             <button
-              onClick={capture}
-              disabled={!faceDetected || isCapturing}
-              aria-disabled={!faceDetected || isCapturing}
+              onClick={() => capture()}
+              disabled={(!faceDetected && !showCaptureAnyway) || isCapturing}
+              aria-disabled={(!faceDetected && !showCaptureAnyway) || isCapturing}
               className={`mt-8 w-full py-4 font-semibold ${
-                faceDetected && !isCapturing
+                (faceDetected || showCaptureAnyway) && !isCapturing
                   ? 'brand-button-primary'
                   : 'cursor-not-allowed rounded-full bg-[rgba(255,179,209,0.45)] text-white/70'
               }`}
@@ -450,8 +491,17 @@ export default function AnalyzePage() {
             </button>
 
             <p className="mt-4 text-center text-sm text-[var(--muted)]">
-              {faceDetected ? 'You are all set for your skin survey.' : 'Position your face in the frame to continue'}
+              {faceDetected ? 'You are all set for your skin survey.' : 'Make sure your face is well-lit and centered. 밝은 곳에서 정면을 바라봐주세요.'}
             </p>
+            {showCaptureAnyway && !faceDetected ? (
+              <button
+                type="button"
+                onClick={() => capture(true)}
+                className="brand-button-secondary mt-4 w-full py-4 font-semibold"
+              >
+                Having trouble? Take photo anyway
+              </button>
+            ) : null}
             {captureError && (
               <p className="mt-3 text-center text-sm text-[#d94d82]">{captureError}</p>
             )}
