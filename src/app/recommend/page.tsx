@@ -568,17 +568,6 @@ export default function RecommendPage() {
           )}
         </div>
 
-        <div className="mt-8">
-          <button
-            type="button"
-            onClick={() => router.push('/care')}
-            className="flex w-full items-center justify-between rounded-full border border-pink-200 px-6 py-4 font-semibold text-pink-500"
-          >
-            <span>Hair &amp; Body Care</span>
-            <span>→</span>
-          </button>
-        </div>
-
         {plan !== 'membership' ? (
           <div className="brand-card mt-6 p-6 text-center">
             <p className="text-lg font-semibold text-[var(--ink)]">K-Beauty AI Membership</p>
