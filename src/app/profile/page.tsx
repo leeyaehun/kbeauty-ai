@@ -6,7 +6,6 @@ import { ChevronRight, Crown, FileText, Globe2, Heart, LogOut, ScrollText, Shiel
 import type { User } from '@supabase/supabase-js'
 
 import RegionModal from '@/components/RegionModal'
-import { getGoogleOAuthOptions } from '@/lib/auth'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
 
@@ -105,17 +104,6 @@ export default function ProfilePage() {
   const profileName = useMemo(() => getProfileName(user), [user])
   const profileImage = useMemo(() => getProfileImage(user), [user])
 
-  const handleGoogleLogin = async () => {
-    const supabase = createClient()
-
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: getGoogleOAuthOptions(
-        `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback?redirect=/profile`
-      ),
-    })
-  }
-
   const handleSignOut = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
@@ -188,10 +176,10 @@ export default function ProfilePage() {
 
             <button
               type="button"
-              onClick={handleGoogleLogin}
+              onClick={() => router.push('/login?redirect=/profile')}
               className="brand-button-primary mx-auto mt-8 flex w-full max-w-sm items-center justify-center gap-3 px-6 py-4 font-semibold"
             >
-              Continue with Google
+              Sign in
             </button>
           </div>
         </div>
