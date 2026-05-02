@@ -6,6 +6,7 @@ import { ChevronRight, Crown, FileText, Globe2, Heart, LogOut, ScrollText, Shiel
 import type { User } from '@supabase/supabase-js'
 
 import RegionModal from '@/components/RegionModal'
+import { getGoogleOAuthOptions } from '@/lib/auth'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
 
@@ -109,9 +110,9 @@ export default function ProfilePage() {
 
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback?redirect=/profile`,
-      },
+      options: getGoogleOAuthOptions(
+        `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback?redirect=/profile`
+      ),
     })
   }
 
