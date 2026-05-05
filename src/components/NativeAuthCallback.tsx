@@ -41,6 +41,8 @@ export default function NativeAuthCallback() {
       }
 
       const code = url.searchParams.get('code')
+      const accessToken = url.searchParams.get('access_token')
+      const refreshToken = url.searchParams.get('refresh_token')
       const redirect = url.searchParams.get('redirect')
       const authError = url.searchParams.get('error') || url.searchParams.get('error_description')
 
@@ -49,7 +51,16 @@ export default function NativeAuthCallback() {
         return
       }
 
-      if (code) {
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        })
+        if (error) {
+          router.replace(`/login?redirect=${encodeURIComponent(getSafeAuthRedirectPath(redirect))}`)
+          return
+        }
+      } else if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code)
         if (error) {
           router.replace(`/login?redirect=${encodeURIComponent(getSafeAuthRedirectPath(redirect))}`)
