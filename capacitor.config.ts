@@ -8,6 +8,14 @@ const config: CapacitorConfig = {
     url: 'https://kbeauty-ai.vercel.app',
     cleartext: false,
   },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 2000,
+      launchAutoHide: true,
+      backgroundColor: '#FFF0F5',
+      showSpinner: false,
+    },
+  },
   ios: {
     contentInset: 'automatic',
   },
