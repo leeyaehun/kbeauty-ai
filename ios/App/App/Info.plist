@@ -25,6 +25,7 @@
 			<string>com.kbeautyai.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>kbeautyai</string>
 				<string>com.kbeautyai.app</string>
 			</array>
 		</dict>
