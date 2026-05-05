@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 
 import BottomNav from '@/components/BottomNav'
+import NativeAuthCallback from '@/components/NativeAuthCallback'
 import TopNav from '@/components/TopNav'
 
 const BOTTOM_NAV_HIDDEN_PATHS = new Set(['/analyze', '/survey'])
@@ -14,6 +15,7 @@ export default function AppChrome({ children }: { children: ReactNode }) {
 
   return (
     <>
+      <NativeAuthCallback />
       <TopNav />
       <div className={hideBottomNav ? '' : 'pb-[calc(80px+env(safe-area-inset-bottom))]'}>
         {children}

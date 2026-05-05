@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { createServerSupabaseClient } from '@/lib/supabase'
-
-function getSafeRedirectPath(redirect: string | null) {
-  if (!redirect || !redirect.startsWith('/') || redirect.startsWith('//')) {
-    return '/analyze'
-  }
-
-  return redirect
-}
+import { getSafeAuthRedirectPath } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url)
@@ -24,5 +17,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${origin}/api/stripe/checkout-redirect`)
   }
 
-  return NextResponse.redirect(`${origin}${getSafeRedirectPath(redirect)}`)
+  return NextResponse.redirect(`${origin}${getSafeAuthRedirectPath(redirect)}`)
 }

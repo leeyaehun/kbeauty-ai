@@ -9,3 +9,13 @@ export function getGoogleOAuthOptions(redirectTo: string, email?: string) {
     },
   }
 }
+
+export const NATIVE_AUTH_CALLBACK_URL = 'com.kbeautyai.app://auth/callback'
+
+export function getSafeAuthRedirectPath(redirect: string | null) {
+  if (!redirect || !redirect.startsWith('/') || redirect.startsWith('//')) {
+    return '/analyze'
+  }
+
+  return redirect
+}
