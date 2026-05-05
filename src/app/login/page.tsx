@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase'
-import { getGoogleOAuthOptions, NATIVE_AUTH_CALLBACK_URL } from '@/lib/auth'
+import { getGoogleOAuthOptions } from '@/lib/auth'
 import { Capacitor } from '@capacitor/core'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -24,7 +24,7 @@ export default function LoginPage() {
 
   const getCallbackUrl = () => {
     const callbackUrl = Capacitor.isNativePlatform()
-      ? NATIVE_AUTH_CALLBACK_URL
+      ? `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/native-callback`
       : `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback`
 
     return `${callbackUrl}?redirect=${encodeURIComponent(redirect)}`
