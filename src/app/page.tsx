@@ -62,11 +62,17 @@ export default function Home() {
       return
     }
 
-    setShowRegionModal(true)
+    window.localStorage.setItem(REGION_STORAGE_KEY, 'global')
+    setShowRegionModal(false)
   }, [])
 
   const handleRegionSelect = (nextRegion: ShoppingRegion) => {
     window.localStorage.setItem(REGION_STORAGE_KEY, nextRegion)
+    setShowRegionModal(false)
+  }
+
+  const handleRegionDismiss = () => {
+    window.localStorage.setItem(REGION_STORAGE_KEY, 'global')
     setShowRegionModal(false)
   }
 
@@ -86,7 +92,9 @@ export default function Home() {
 
   return (
     <main className="brand-page brand-grid px-6 py-8 md:px-8 md:py-10">
-      {showRegionModal ? <RegionModal onSelect={handleRegionSelect} /> : null}
+      {showRegionModal ? (
+        <RegionModal onSelect={handleRegionSelect} onClose={handleRegionDismiss} />
+      ) : null}
 
       <div className="brand-shell max-w-4xl">
         <div className="mb-14 flex justify-center">

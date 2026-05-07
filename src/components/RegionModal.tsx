@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { X } from 'lucide-react'
 
 import type { ShoppingRegion } from '@/lib/region'
@@ -34,23 +35,43 @@ export default function RegionModal({
   onSelect,
   title = 'Choose your Olive Young storefront',
 }: RegionModalProps) {
+  useEffect(() => {
+    if (!onClose) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(89,34,58,0.28)] px-6 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(89,34,58,0.28)] px-6 backdrop-blur-sm"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose?.()
+        }
+      }}
+    >
       <div className="w-full max-w-xl rounded-[34px] border border-[rgba(255,107,157,0.18)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,240,245,0.94))] p-7 shadow-[0_30px_60px_rgba(149,64,109,0.18)] md:p-8">
         <div className="flex items-start justify-between gap-4">
           <div className="brand-chip px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#d94d82]">
             Shopping region
           </div>
-          {onClose ? (
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(255,107,157,0.14)] bg-white/90 text-[var(--muted-strong)]"
-              aria-label="Close region selector"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(255,107,157,0.14)] bg-white/90 text-[var(--muted-strong)]"
+            aria-label="Close region selector"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
         <h2 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-[var(--ink)]">
           {title}
@@ -71,6 +92,14 @@ export default function RegionModal({
             </button>
           ))}
         </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-5 w-full rounded-full border border-[rgba(255,107,157,0.16)] bg-white/80 px-5 py-3 text-sm font-semibold text-[var(--muted-strong)]"
+        >
+          Skip for now
+        </button>
       </div>
     </div>
   )

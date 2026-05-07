@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { X } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase'
 
@@ -26,9 +27,15 @@ export default function UpgradeModal({
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [dismissed, setDismissed] = useState(false)
 
-  if (!inline && !open) {
+  if (!inline && (!open || dismissed)) {
     return null
+  }
+
+  const handleClose = () => {
+    setDismissed(true)
+    onClose?.()
   }
 
   const handleCheckout = async () => {
@@ -91,12 +98,14 @@ export default function UpgradeModal({
           </p>
         </div>
 
-        {!inline && onClose && (
+        {!inline && (
           <button
-            onClick={onClose}
-            className="rounded-full border border-[rgba(255,107,157,0.16)] bg-white/90 px-4 py-2 text-sm font-semibold text-[var(--muted-strong)]"
+            type="button"
+            onClick={handleClose}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[rgba(255,107,157,0.16)] bg-white/90 text-[var(--muted-strong)]"
+            aria-label="Close membership prompt"
           >
-            Close
+            <X className="h-4 w-4" />
           </button>
         )}
       </div>
@@ -131,7 +140,14 @@ export default function UpgradeModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(89,34,58,0.28)] px-6 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(89,34,58,0.28)] px-6 backdrop-blur-sm"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          handleClose()
+        }
+      }}
+    >
       {content}
     </div>
   )
