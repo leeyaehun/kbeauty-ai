@@ -104,7 +104,7 @@ export default function TermsPage() {
           <section className="brand-card p-6 md:p-7">
             <h2 className="text-2xl font-semibold tracking-[-0.03em] text-[var(--ink)]">10. Contact</h2>
             <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
-              - Email: <a className="font-medium text-[#d94d82]" href="mailto:support@kbeauty-ai.com">support@kbeauty-ai.com</a>
+              - Email: <a className="font-medium text-[#d94d82]" href="mailto:leeyaehun@gmail.com">leeyaehun@gmail.com</a>
             </p>
           </section>
         </div>

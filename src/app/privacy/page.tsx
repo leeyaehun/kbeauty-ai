@@ -108,7 +108,7 @@ export default function PrivacyPage() {
           <section className="brand-card p-6 md:p-7">
             <h2 className="text-2xl font-semibold tracking-[-0.03em] text-[var(--ink)]">9. Contact Us</h2>
             <div className="mt-4 space-y-3 text-sm leading-7 text-[var(--muted)]">
-              <p>- Email: <a className="font-medium text-[#d94d82]" href="mailto:privacy@kbeauty-ai.com">privacy@kbeauty-ai.com</a></p>
+              <p>- Email: <a className="font-medium text-[#d94d82]" href="mailto:leeyaehun@gmail.com">leeyaehun@gmail.com</a></p>
               <p>- Website: <a className="font-medium text-[#d94d82]" href="https://kbeauty-ai.vercel.app" target="_blank" rel="noopener noreferrer">https://kbeauty-ai.vercel.app</a></p>
             </div>
           </section>

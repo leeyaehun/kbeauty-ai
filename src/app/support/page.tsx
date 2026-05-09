@@ -48,11 +48,11 @@ export default function SupportPage() {
 
           <div className="mt-8 grid gap-4 md:grid-cols-2">
             <a
-              href="mailto:support@kbeauty-ai.com?subject=K-Beauty%20AI%20Support"
+              href="mailto:leeyaehun@gmail.com?subject=K-Beauty%20AI%20Support"
               className="rounded-[8px] border border-pink-200 bg-[#fff7fb] p-5 text-left transition hover:border-pink-300 hover:bg-white"
             >
               <p className="text-sm font-semibold uppercase text-[#d94d82]">Contact</p>
-              <p className="mt-2 text-lg font-semibold text-[var(--ink)]">support@kbeauty-ai.com</p>
+              <p className="mt-2 text-lg font-semibold text-[var(--ink)]">leeyaehun@gmail.com</p>
               <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
                 Include your account email, device model, iOS version, and a short description of the issue.
               </p>
@@ -101,8 +101,8 @@ export default function SupportPage() {
           <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
             K-Beauty AI accounts may include an email address, saved analysis history, wishlists, and membership records.
             To request account deletion, email{' '}
-            <a className="font-semibold text-[#d94d82]" href="mailto:support@kbeauty-ai.com?subject=Delete%20my%20K-Beauty%20AI%20account">
-              support@kbeauty-ai.com
+            <a className="font-semibold text-[#d94d82]" href="mailto:leeyaehun@gmail.com?subject=Delete%20my%20K-Beauty%20AI%20account">
+              leeyaehun@gmail.com
             </a>{' '}
             from the email address used for your account with the subject "Delete my K-Beauty AI account". We will delete
             or anonymize account data unless retention is required for security, legal, or payment records.
