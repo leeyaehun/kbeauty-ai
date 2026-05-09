@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>K-Beauty AI</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+        background: #fff7fb;
+        color: #281821;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+        background: linear-gradient(180deg, #fff7fb 0%, #fff0f5 100%);
+      }
+
+      main {
+        width: min(100%, 440px);
+        border: 1px solid rgba(255, 107, 157, 0.22);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.94);
+        padding: 28px;
+        box-shadow: 0 18px 40px rgba(149, 64, 109, 0.12);
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: 28px;
+        line-height: 1.05;
+      }
+
+      p {
+        margin: 0;
+        color: #695f66;
+        line-height: 1.55;
+      }
+
+      button {
+        width: 100%;
+        min-height: 48px;
+        margin-top: 22px;
+        border: 0;
+        border-radius: 999px;
+        background: #ff6b9d;
+        color: #fff;
+        font: inherit;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>K-Beauty AI</h1>
+      <p>The app could not reach the production service. Check your connection and try again.</p>
+      <button type="button" onclick="window.location.reload()">Retry</button>
+    </main>
+  </body>
+</html>

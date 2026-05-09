@@ -42,9 +42,14 @@ export default function TopNav() {
   useEffect(() => {
     const supabase = createClient()
 
-    supabase.auth.getUser().then(({ data: { user: currentUser } }) => {
-      setUser(currentUser)
-    })
+    supabase.auth.getUser()
+      .then(({ data: { user: currentUser } }) => {
+        setUser(currentUser)
+      })
+      .catch((error) => {
+        console.warn('[launch] top nav auth check failed', error)
+        setUser(null)
+      })
 
     const {
       data: { subscription },

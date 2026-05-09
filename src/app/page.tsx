@@ -5,6 +5,13 @@ import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 
 import RegionModal from '@/components/RegionModal'
+import {
+  LAUNCH_PLAN_TIMEOUT_MS,
+  LAUNCH_TIMEOUT_MS,
+  getLaunchEnvironmentSummary,
+  getLaunchErrorMessage,
+  withLaunchTimeout,
+} from '@/lib/launch'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
 
@@ -31,40 +38,102 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [plan, setPlan] = useState<UserPlan>('free')
   const [loading, setLoading] = useState(true)
+  const [launchIssue, setLaunchIssue] = useState('')
+  const [launchAttempt, setLaunchAttempt] = useState(0)
   const [showRegionModal, setShowRegionModal] = useState(false)
 
   useEffect(() => {
-    const supabase = createClient()
+    let isMounted = true
 
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      setUser(user)
+    const loadLaunchState = async () => {
+      console.info('[launch] initialization started', getLaunchEnvironmentSummary())
+      setLoading(true)
+      setLaunchIssue('')
 
-      if (!user) {
+      try {
+        try {
+          const storedRegion = window.localStorage.getItem(REGION_STORAGE_KEY)
+
+          if (!isShoppingRegion(storedRegion)) {
+            window.localStorage.setItem(REGION_STORAGE_KEY, 'global')
+          }
+          setShowRegionModal(false)
+        } catch (error) {
+          console.warn('[launch] region storage failed; using global fallback', error)
+          setShowRegionModal(false)
+        }
+
+        const supabase = createClient()
+        const {
+          data: { user },
+          error: userError,
+        } = await withLaunchTimeout(
+          supabase.auth.getUser(),
+          'Supabase launch auth check',
+          LAUNCH_TIMEOUT_MS
+        )
+
+        if (userError) {
+          throw userError
+        }
+
+        if (!isMounted) {
+          return
+        }
+
+        setUser(user)
+
+        if (!user) {
+          setPlan('free')
+          console.info('[launch] no active session; rendering Home')
+          return
+        }
+
+        const { data: planData, error: planError } = await withLaunchTimeout(
+          Promise.resolve(
+            supabase
+              .from('user_plans')
+              .select('plan')
+              .eq('user_id', user.id)
+              .single()
+          ),
+          'Supabase launch plan lookup',
+          LAUNCH_PLAN_TIMEOUT_MS
+        )
+
+        if (planError) {
+          console.warn('[launch] plan lookup failed; using free fallback', planError)
+        }
+
+        if (!isMounted) {
+          return
+        }
+
+        setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
+        console.info('[launch] initialization completed')
+      } catch (error) {
+        console.error('[launch] initialization failed; rendering usable Home fallback', error)
+
+        if (!isMounted) {
+          return
+        }
+
+        setUser(null)
         setPlan('free')
-        setLoading(false)
-        return
+        setLaunchIssue(getLaunchErrorMessage(error))
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
       }
-
-      const { data: planData } = await supabase
-        .from('user_plans')
-        .select('plan')
-        .eq('user_id', user.id)
-        .single()
-
-      setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
-      setLoading(false)
-    })
-
-    const storedRegion = window.localStorage.getItem(REGION_STORAGE_KEY)
-
-    if (isShoppingRegion(storedRegion)) {
-      setShowRegionModal(false)
-      return
     }
 
-    window.localStorage.setItem(REGION_STORAGE_KEY, 'global')
-    setShowRegionModal(false)
-  }, [])
+    void loadLaunchState()
+
+    return () => {
+      isMounted = false
+    }
+  }, [launchAttempt])
 
   const handleRegionSelect = (nextRegion: ShoppingRegion) => {
     window.localStorage.setItem(REGION_STORAGE_KEY, nextRegion)
@@ -165,6 +234,20 @@ export default function Home() {
               </>
             )}
           </div>
+
+          {launchIssue ? (
+            <div className="mx-auto max-w-xl rounded-[8px] border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm leading-6 text-amber-900">
+              <p className="font-semibold">Some account data could not load.</p>
+              <p className="mt-1">You can keep using the app, or retry the launch check.</p>
+              <button
+                type="button"
+                onClick={() => setLaunchAttempt((attempt) => attempt + 1)}
+                className="mt-3 rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900"
+              >
+                Retry
+              </button>
+            </div>
+          ) : null}
 
           {plan !== 'membership' ? (
             <div className="mx-auto max-w-xl rounded-[28px] border border-[rgba(255,107,157,0.14)] bg-white/92 p-6 text-center shadow-[0_18px_34px_rgba(149,64,109,0.08)]">
