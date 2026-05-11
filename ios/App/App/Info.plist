@@ -41,6 +41,12 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>K-Beauty AI uses the camera to capture selfies for skin analysis and personal color guidance.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>K-Beauty AI may access your photo library so you can choose a selfie for skin analysis and personal color guidance.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>K-Beauty AI may save generated analysis images to your photo library when you choose to export them.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
