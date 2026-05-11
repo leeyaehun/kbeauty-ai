@@ -13,21 +13,38 @@ export default function LoginPage() {
   const [redirect, setRedirect] = useState('')
   const [googleEmail, setGoogleEmail] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [passwordLoading, setPasswordLoading] = useState(false)
   const [emailLoading, setEmailLoading] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
   const [authError, setAuthError] = useState('')
+  const [authMessage, setAuthMessage] = useState('')
 
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get('redirect')
     setRedirect(value ?? '')
   }, [])
 
-  const getCallbackUrl = () => {
+  const getCallbackUrl = (nextRedirect = redirect) => {
     const callbackUrl = Capacitor.isNativePlatform()
       ? `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/native-callback`
       : `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback`
 
-    return `${callbackUrl}?redirect=${encodeURIComponent(redirect)}`
+    return `${callbackUrl}?redirect=${encodeURIComponent(nextRedirect)}`
+  }
+
+  const finishLogin = () => {
+    const safeRedirect = redirect && redirect.startsWith('/') && !redirect.startsWith('//')
+      ? redirect
+      : '/analyze'
+
+    if (redirect === 'checkout') {
+      window.location.href = '/api/stripe/checkout-redirect'
+      return
+    }
+
+    router.push(safeRedirect)
+    router.refresh()
   }
 
   const handleGoogleLogin = async (event?: FormEvent<HTMLFormElement>) => {
@@ -60,6 +77,7 @@ export default function LoginPage() {
     setEmailLoading(true)
     setEmailSent(false)
     setAuthError('')
+    setAuthMessage('')
 
     const { error } = await supabase.auth.signInWithOtp({
       email: trimmedEmail,
@@ -77,6 +95,94 @@ export default function LoginPage() {
     }
 
     setEmailSent(true)
+  }
+
+  const handlePasswordLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail || !password) {
+      return
+    }
+
+    setPasswordLoading(true)
+    setEmailSent(false)
+    setAuthError('')
+    setAuthMessage('')
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: trimmedEmail,
+      password,
+    })
+
+    setPasswordLoading(false)
+
+    if (error) {
+      setAuthError(error.message)
+      return
+    }
+
+    finishLogin()
+  }
+
+  const handlePasswordSignUp = async () => {
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail || !password) {
+      return
+    }
+
+    setPasswordLoading(true)
+    setEmailSent(false)
+    setAuthError('')
+    setAuthMessage('')
+
+    const { data, error } = await supabase.auth.signUp({
+      email: trimmedEmail,
+      password,
+      options: {
+        emailRedirectTo: getCallbackUrl(),
+      },
+    })
+
+    setPasswordLoading(false)
+
+    if (error) {
+      setAuthError(error.message)
+      return
+    }
+
+    if (data.session) {
+      finishLogin()
+      return
+    }
+
+    setAuthMessage('Check your inbox to confirm your account, then sign in with your password.')
+  }
+
+  const handlePasswordReset = async () => {
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) {
+      setAuthError('Enter your email address first.')
+      return
+    }
+
+    setEmailLoading(true)
+    setEmailSent(false)
+    setAuthError('')
+    setAuthMessage('')
+
+    const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+      redirectTo: getCallbackUrl('/account/password'),
+    })
+
+    setEmailLoading(false)
+
+    if (error) {
+      setAuthError(error.message)
+      return
+    }
+
+    setAuthMessage('Check your inbox for a password reset link.')
   }
 
   return (
@@ -147,7 +253,7 @@ export default function LoginPage() {
                 <div className="h-px flex-1 bg-[#f0c8d8]" />
               </div>
 
-              <form onSubmit={handleEmailLogin}>
+              <form onSubmit={handlePasswordLogin}>
                 <label htmlFor="email-login" className="mb-2 block text-left text-sm font-semibold text-[var(--ink)]">
                   Email address
                 </label>
@@ -162,6 +268,54 @@ export default function LoginPage() {
                   placeholder="you@example.com"
                   className="mb-4 w-full rounded-[8px] border border-[#f0c8d8] bg-white/80 px-4 py-3 text-sm text-[var(--ink)] outline-none transition focus:border-[#ff6b9d] focus:ring-4 focus:ring-[#ff6b9d]/15"
                 />
+                <label htmlFor="password-login" className="mb-2 block text-left text-sm font-semibold text-[var(--ink)]">
+                  Password
+                </label>
+                <input
+                  id="password-login"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Enter your password"
+                  className="mb-4 w-full rounded-[8px] border border-[#f0c8d8] bg-white/80 px-4 py-3 text-sm text-[var(--ink)] outline-none transition focus:border-[#ff6b9d] focus:ring-4 focus:ring-[#ff6b9d]/15"
+                />
+                <button
+                  type="submit"
+                  disabled={passwordLoading}
+                  className="brand-button-primary w-full px-6 py-4 font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {passwordLoading ? 'Signing in...' : 'Sign in with password'}
+                </button>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={handlePasswordSignUp}
+                    disabled={passwordLoading}
+                    className="brand-button-ghost px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Create account
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePasswordReset}
+                    disabled={emailLoading}
+                    className="brand-button-ghost px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Reset password
+                  </button>
+                </div>
+              </form>
+
+              <div className="my-6 flex items-center gap-3">
+                <div className="h-px flex-1 bg-[#f0c8d8]" />
+                <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">or</span>
+                <div className="h-px flex-1 bg-[#f0c8d8]" />
+              </div>
+
+              <form onSubmit={handleEmailLogin}>
                 <button
                   type="submit"
                   disabled={emailLoading}
@@ -174,6 +328,12 @@ export default function LoginPage() {
               {emailSent ? (
                 <p className="mt-4 rounded-[8px] bg-[#f6deb1]/35 px-4 py-3 text-left text-sm leading-6 text-[var(--ink)]">
                   Check your inbox for a secure login link.
+                </p>
+              ) : null}
+
+              {authMessage ? (
+                <p className="mt-4 rounded-[8px] bg-[#f6deb1]/35 px-4 py-3 text-left text-sm leading-6 text-[var(--ink)]">
+                  {authMessage}
                 </p>
               ) : null}
 
