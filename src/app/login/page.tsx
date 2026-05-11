@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase'
-import { getGoogleOAuthOptions } from '@/lib/auth'
+import { getAppleOAuthOptions, getGoogleOAuthOptions } from '@/lib/auth'
 import { Capacitor } from '@capacitor/core'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -39,6 +39,13 @@ export default function LoginPage() {
         getCallbackUrl(),
         googleEmail
       ),
+    })
+  }
+
+  const handleAppleLogin = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'apple',
+      options: getAppleOAuthOptions(getCallbackUrl()),
     })
   }
 
@@ -92,6 +99,20 @@ export default function LoginPage() {
             </p>
 
             <div className="mx-auto w-full max-w-sm">
+              <button
+                type="button"
+                onClick={handleAppleLogin}
+                className="mb-4 flex w-full items-center justify-center gap-3 rounded-[8px] bg-black px-6 py-4 font-semibold text-white shadow-[0_14px_30px_rgba(0,0,0,0.16)] transition hover:bg-[#1f1f1f]"
+              >
+                <svg width="18" height="22" viewBox="0 0 18 22" fill="none" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M14.86 11.63c-.02-2.13 1.74-3.15 1.82-3.2-1-1.46-2.54-1.66-3.08-1.68-1.31-.13-2.55.77-3.21.77-.67 0-1.69-.75-2.78-.73-1.43.02-2.75.83-3.49 2.11-1.49 2.59-.38 6.42 1.08 8.52.71 1.03 1.56 2.19 2.68 2.15 1.07-.04 1.48-.69 2.77-.69 1.29 0 1.66.69 2.8.67 1.15-.02 1.88-1.05 2.59-2.09.82-1.2 1.16-2.36 1.18-2.42-.03-.01-2.33-.9-2.36-3.41ZM12.74 5.36c.59-.71.99-1.71.88-2.7-.85.03-1.88.57-2.49 1.28-.55.63-1.03 1.65-.9 2.62.95.08 1.92-.48 2.51-1.2Z"
+                  />
+                </svg>
+                Continue with Apple
+              </button>
+
               <form onSubmit={handleGoogleLogin}>
                 <label htmlFor="google-email" className="mb-2 block text-left text-sm font-semibold text-[var(--ink)]">
                   Google account email

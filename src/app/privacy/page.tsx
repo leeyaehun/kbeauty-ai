@@ -3,7 +3,7 @@ const PRIVACY_SECTIONS = [
     title: '1. Information We Collect',
     items: [
       'Photos/selfies (processed for skin analysis, not stored permanently)',
-      'Email address (via Google Sign-in)',
+      'Email address (via Google or Apple Sign-in)',
       'Skin analysis results',
       'Wishlist and product preferences',
       'Usage data',
@@ -29,7 +29,7 @@ const PRIVACY_SECTIONS = [
   {
     title: '4. Third-Party Services',
     items: [
-      'Google Sign-in (authentication)',
+      'Google Sign-in and Apple Sign-in (authentication)',
       'OpenAI (skin analysis AI)',
       'Anthropic Claude (product recommendations)',
       'Stripe (payment processing)',

@@ -10,6 +10,13 @@ export function getGoogleOAuthOptions(redirectTo: string, email?: string) {
   }
 }
 
+export function getAppleOAuthOptions(redirectTo: string) {
+  return {
+    redirectTo,
+    scopes: 'name email',
+  }
+}
+
 export const NATIVE_AUTH_CALLBACK_URL = 'kbeautyai://auth/callback'
 
 export function getSafeAuthRedirectPath(redirect: string | null) {
