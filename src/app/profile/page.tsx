@@ -45,6 +45,7 @@ export default function ProfilePage() {
   const [region, setRegion] = useState<ShoppingRegion>('korea')
   const [showRegionModal, setShowRegionModal] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [billingPortalLoading, setBillingPortalLoading] = useState(false)
   const [wishlistCount, setWishlistCount] = useState(0)
   const [error, setError] = useState('')
 
@@ -136,6 +137,32 @@ export default function ProfilePage() {
       setError('Something went wrong.')
     } finally {
       setCheckoutLoading(false)
+    }
+  }
+
+  const handleBillingPortal = async () => {
+    setBillingPortalLoading(true)
+    setError('')
+
+    try {
+      const res = await fetch('/api/stripe/billing-portal', { method: 'POST' })
+      const data = await res.json()
+
+      if (res.status === 401) {
+        router.push('/login?redirect=/profile')
+        return
+      }
+
+      if (data.url) {
+        window.location.href = data.url
+        return
+      }
+
+      setError(data.error || 'Unable to open membership management.')
+    } catch {
+      setError('Unable to open membership management.')
+    } finally {
+      setBillingPortalLoading(false)
     }
   }
 
@@ -296,8 +323,8 @@ export default function ProfilePage() {
 
           <button
             type="button"
-            onClick={handleCheckout}
-            disabled={checkoutLoading || plan === 'membership'}
+            onClick={plan === 'membership' ? handleBillingPortal : handleCheckout}
+            disabled={checkoutLoading || billingPortalLoading}
             className="brand-card-soft flex items-center justify-between px-5 py-5 text-left disabled:opacity-70"
           >
             <div className="flex items-center gap-4">
@@ -306,11 +333,15 @@ export default function ProfilePage() {
               </div>
               <div>
                 <p className="font-semibold text-[var(--ink)]">
-                  {plan === 'membership' ? 'Membership Active' : 'Get Membership'}
+                  {plan === 'membership' ? 'Manage Membership' : 'Get Membership'}
                 </p>
                 <p className="mt-1 text-sm text-[var(--muted)]">
-                  {plan === 'membership'
-                    ? 'Your subscription is currently active.'
+                  {billingPortalLoading
+                    ? 'Opening billing portal...'
+                    : plan === 'membership'
+                    ? 'Update billing details or cancel your subscription.'
+                    : checkoutLoading
+                    ? 'Preparing checkout...'
                     : 'Unlock personal color analysis and premium features.'}
                 </p>
               </div>

@@ -19,7 +19,7 @@ const FAQS = [
   {
     question: 'How do I cancel membership billing?',
     answer:
-      'Subscription and billing issues are handled through the store or payment provider used at purchase. Contact support if you need help identifying the right cancellation path.',
+      'Open Profile, choose Manage Membership, and use the Stripe billing portal to update billing details or cancel your subscription.',
   },
 ]
 
