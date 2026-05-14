@@ -7,6 +7,7 @@ import type { User } from '@supabase/supabase-js'
 
 import ProductCard from '@/components/ProductCard'
 import ToastMessage from '@/components/ToastMessage'
+import { MEMBERSHIP_PLAN_SELECT, getPlanFromMembership } from '@/lib/membership'
 import { getProductPricePresentation, type PriceCurrencyCode } from '@/lib/pricing'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
@@ -136,11 +137,11 @@ export default function RecommendPage() {
 
       void supabase
         .from('user_plans')
-        .select('plan')
+        .select(MEMBERSHIP_PLAN_SELECT)
         .eq('user_id', currentUser.id)
         .single()
         .then(({ data: planData }) => {
-          setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
+          setPlan(getPlanFromMembership(planData))
         })
     })
 
@@ -156,11 +157,11 @@ export default function RecommendPage() {
 
       void supabase
         .from('user_plans')
-        .select('plan')
+        .select(MEMBERSHIP_PLAN_SELECT)
         .eq('user_id', session.user.id)
         .single()
         .then(({ data: planData }) => {
-          setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
+          setPlan(getPlanFromMembership(planData))
         })
     })
 
@@ -563,7 +564,7 @@ export default function RecommendPage() {
                     onClick={goToMembership}
                     className="mt-3 rounded-full bg-pink-500 px-6 py-2 text-sm font-semibold text-white"
                   >
-                    Join Membership - $9/month
+                    View Membership
                   </button>
                 </div>
               ) : null}
@@ -578,23 +579,10 @@ export default function RecommendPage() {
               Unlock personal color analysis and premium makeup recommendations.
             </p>
             <button
-              onClick={async () => {
-                const supabase = createClient()
-                const { data: { user } } = await supabase.auth.getUser()
-
-                if (!user) {
-                  router.push('/login?redirect=checkout')
-                  return
-                }
-
-                const res = await fetch('/api/stripe/checkout', { method: 'POST' })
-                const data = await res.json()
-                if (data.url) window.location.href = data.url
-                else alert(data.error || 'Something went wrong.')
-              }}
+              onClick={goToMembership}
               className="brand-button-primary mt-5 w-full py-4 font-semibold"
             >
-              Membership — $9/month
+              View Membership
             </button>
           </div>
         ) : null}

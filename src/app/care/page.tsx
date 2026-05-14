@@ -14,6 +14,7 @@ import {
   type CareCategory,
   type CareSubcategory,
 } from '@/lib/care'
+import { MEMBERSHIP_PLAN_SELECT, getPlanFromMembership } from '@/lib/membership'
 import { getProductPricePresentation, type PriceCurrencyCode } from '@/lib/pricing'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
@@ -98,11 +99,11 @@ export default function CarePage() {
 
       void supabase
         .from('user_plans')
-        .select('plan')
+        .select(MEMBERSHIP_PLAN_SELECT)
         .eq('user_id', currentUser.id)
         .single()
         .then(({ data: planData }) => {
-          setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
+          setPlan(getPlanFromMembership(planData))
         })
     })
 
@@ -118,11 +119,11 @@ export default function CarePage() {
 
       void supabase
         .from('user_plans')
-        .select('plan')
+        .select(MEMBERSHIP_PLAN_SELECT)
         .eq('user_id', session.user.id)
         .single()
         .then(({ data: planData }) => {
-          setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
+          setPlan(getPlanFromMembership(planData))
         })
     })
 
@@ -476,7 +477,7 @@ export default function CarePage() {
                   onClick={goToMembership}
                   className="mt-3 rounded-full bg-pink-500 px-6 py-2 text-sm font-semibold text-white"
                 >
-                  Join Membership - $9/month
+                  View Membership
                 </button>
               </div>
             ) : null}

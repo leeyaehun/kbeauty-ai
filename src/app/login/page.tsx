@@ -38,11 +38,6 @@ export default function LoginPage() {
       ? redirect
       : '/analyze'
 
-    if (redirect === 'checkout') {
-      window.location.href = '/api/stripe/checkout-redirect'
-      return
-    }
-
     router.push(safeRedirect)
     router.refresh()
   }

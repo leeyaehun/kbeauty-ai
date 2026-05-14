@@ -7,6 +7,7 @@ import {
   loadMakeupProductLinks,
   resolveProductLinks,
 } from '@/lib/personal-color-makeup'
+import { MEMBERSHIP_PLAN_SELECT, hasActiveMembership } from '@/lib/membership'
 import { createServerSupabaseClient } from '@/lib/supabase'
 
 function getAnthropicClient() {
@@ -96,11 +97,11 @@ export async function POST(req: NextRequest) {
 
     const { data: userPlan } = await supabase
       .from('user_plans')
-      .select('plan')
+      .select(MEMBERSHIP_PLAN_SELECT)
       .eq('user_id', user.id)
       .maybeSingle()
 
-    if (userPlan?.plan !== 'membership') {
+    if (!hasActiveMembership(userPlan)) {
       return NextResponse.json({ error: 'Personal color analysis is a Membership feature.' }, { status: 403 })
     }
 

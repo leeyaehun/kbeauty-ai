@@ -13,9 +13,5 @@ export async function GET(req: NextRequest) {
     await supabase.auth.exchangeCodeForSession(code)
   }
 
-  if (redirect === 'checkout') {
-    return NextResponse.redirect(`${origin}/api/stripe/checkout-redirect`)
-  }
-
   return NextResponse.redirect(`${origin}${getSafeAuthRedirectPath(redirect)}`)
 }

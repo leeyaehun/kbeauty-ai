@@ -19,7 +19,7 @@ const FAQS = [
   {
     question: 'How do I cancel membership billing?',
     answer:
-      'Open Profile, choose Manage Membership, and use the Stripe billing portal to update billing details or cancel your subscription.',
+      'Open the App Store subscription settings for your Apple ID to update, cancel, or restore your K-Beauty AI Membership.',
   },
 ]
 
@@ -105,7 +105,7 @@ export default function SupportPage() {
               leeyaehun@gmail.com
             </a>{' '}
             from the email address used for your account with the subject "Delete my K-Beauty AI account". We will delete
-            or anonymize account data unless retention is required for security, legal, or payment records.
+            or anonymize account data unless retention is required for security, legal, or App Store transaction records.
           </p>
           <div className="mt-5 flex flex-col gap-3 text-sm font-semibold text-[#d94d82] sm:flex-row">
             <Link href="/privacy" className="rounded-full border border-pink-200 bg-[#fff7fb] px-5 py-3 text-center">

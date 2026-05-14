@@ -12,6 +12,7 @@ import {
   getLaunchErrorMessage,
   withLaunchTimeout,
 } from '@/lib/launch'
+import { MEMBERSHIP_PLAN_SELECT, getPlanFromMembership } from '@/lib/membership'
 import { REGION_STORAGE_KEY, isShoppingRegion, type ShoppingRegion } from '@/lib/region'
 import { createClient } from '@/lib/supabase'
 
@@ -93,7 +94,7 @@ export default function Home() {
           Promise.resolve(
             supabase
               .from('user_plans')
-              .select('plan')
+              .select(MEMBERSHIP_PLAN_SELECT)
               .eq('user_id', user.id)
               .single()
           ),
@@ -109,7 +110,7 @@ export default function Home() {
           return
         }
 
-        setPlan(planData?.plan === 'membership' ? 'membership' : 'free')
+        setPlan(getPlanFromMembership(planData))
         console.info('[launch] initialization completed')
       } catch (error) {
         console.error('[launch] initialization failed; rendering usable Home fallback', error)
@@ -259,24 +260,15 @@ export default function Home() {
                 type="button"
                 onClick={() => {
                   if (!user) {
-                    router.push('/login?redirect=checkout')
+                    router.push('/login?redirect=%2Fmembership')
                     return
                   }
 
-                  void fetch('/api/stripe/checkout', { method: 'POST' })
-                    .then((res) => res.json())
-                    .then((data) => {
-                      if (data.url) {
-                        window.location.href = data.url
-                        return
-                      }
-
-                      alert(data.error || 'Something went wrong.')
-                    })
+                  router.push('/membership')
                 }}
                 className="brand-button-primary mt-5 w-full py-4 font-semibold"
               >
-                Membership — $9/month
+                View Membership
               </button>
             </div>
           ) : null}

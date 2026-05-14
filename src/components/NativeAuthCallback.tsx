@@ -82,11 +82,6 @@ export default function NativeAuthCallback() {
         }
       }
 
-      if (redirect === 'checkout') {
-        window.location.href = '/api/stripe/checkout-redirect'
-        return
-      }
-
       router.replace(getSafeAuthRedirectPath(redirect))
       router.refresh()
     }

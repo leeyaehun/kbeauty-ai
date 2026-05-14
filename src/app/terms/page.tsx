@@ -18,9 +18,9 @@ const TERMS_SECTIONS = [
   {
     title: '4. Membership',
     items: [
-      'Membership is billed at $9/month',
-      'Cancel anytime from your profile',
-      'No refunds for partial months',
+      'Membership is purchased through Apple In-App Purchase',
+      'Subscription billing, cancellation, and refunds are managed by Apple through your App Store account',
+      'Premium features unlock only after a successful or restored App Store transaction',
     ],
   },
   {

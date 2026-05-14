@@ -12,6 +12,7 @@ import PersonalColorCanvas, {
   SEASON_COLOR_SWATCHES,
 } from '@/components/PersonalColorCanvas'
 import UpgradeModal from '@/components/UpgradeModal'
+import { MEMBERSHIP_PLAN_SELECT, hasActiveMembership } from '@/lib/membership'
 import { createClient } from '@/lib/supabase'
 
 type MakeupProduct = {
@@ -436,13 +437,11 @@ export default function PersonalColorPage() {
 
         const { data: planData } = await supabase
           .from('user_plans')
-          .select('plan')
+          .select(MEMBERSHIP_PLAN_SELECT)
           .eq('user_id', user.id)
           .single()
 
-        console.log('Current plan:', planData?.plan)
-
-        const hasMembership = planData?.plan === 'membership'
+        const hasMembership = hasActiveMembership(planData)
 
         if (isActive) {
           setShowUpgrade(requestedUpgrade && !hasMembership)
