@@ -24,14 +24,26 @@
 .DS_Store
 *.pem
 
+# signing keys / platform credentials
+*.jks
+*.keystore
+*.p12
+*.p8
+*.mobileprovision
+key.properties
+keystore.properties
+google-services.json
+GoogleService-Info.plist
+
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
+!.env.example
 
 # vercel
 .vercel
